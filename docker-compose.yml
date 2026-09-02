@@ -1,0 +1,41 @@
+services:
+  mariadb:
+    image: mariadb:11
+    container_name: clima_mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: clima_tcc
+      MARIADB_USER: clima_user
+      MARIADB_PASSWORD: clima_pass
+    volumes:
+      - ./docker/mariadb_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+  php:
+    build:
+      context: ./docker/php
+    container_name: clima_php
+    restart: unless-stopped
+    environment:
+      DB_HOST: mariadb
+      DB_DATABASE: clima_tcc
+      DB_USER: clima_user
+      DB_PASSWORD: clima_pass
+    volumes:
+      - ./public:/var/www/html
+      - ./database/seed.php:/seed.php:ro
+    depends_on:
+      - mariadb
+
+  nginx:
+    image: nginx:alpine
+    container_name: clima_nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./public:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
