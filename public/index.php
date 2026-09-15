@@ -39,14 +39,14 @@
             <div class="info-icone verde">✓</div>
             <div>
                 <h3>Rápida e Simples</h3>
-                <p>São apenas 10 perguntas. O tempo estimado é de 3 a 5 minutos.</p>
+                <p>Poucas perguntas. Leva só alguns minutos.</p>
             </div>
         </div>
 
         <div class="como">
             <h2>Como funciona?</h2>
             <ol>
-                <li>Você avaliará 10 aspectos do ambiente de trabalho</li>
+                <li>Você avaliará os aspectos do ambiente de trabalho</li>
                 <li>Arraste o controle para escolher sua nota de 0 a 10</li>
                 <li>Opcionalmente, deixe um comentário ao final</li>
             </ol>
@@ -69,17 +69,19 @@
     <main class="conteudo">
         <button class="voltar" onclick="mostrarInicio()">‹ Voltar</button>
 
+        <div id="formularioTitulo" class="formulario-titulo-ativo"></div>
+
         <div class="progresso-topo">
             <div>
                 <span>Progresso da pesquisa</span>
-                <b id="numeroPergunta">1 de 10</b>
+                <b id="numeroPergunta">1 de 1</b>
             </div>
             <div class="barra">
                 <div id="barraProgresso"></div>
             </div>
         </div>
 
-        <div id="perguntas"></div>
+        <div id="perguntas"><p>Carregando pesquisa...</p></div>
 
         <div class="comentario-box">
             <label>Comentário final (opcional)</label>
@@ -120,99 +122,117 @@
         <div class="logo">Pesquisa de Clima<br><span>Organizacional</span></div>
         <div class="gestor-label">Painel do Gestor</div>
 
-        <button class="menu-item ativo" onclick="menuDashboard(this)">▣ &nbsp; Dashboard</button>
-        <button class="menu-item" onclick="mostrarAviso(this)">▥ &nbsp; Resultados</button>
-        <button class="menu-item" onclick="mostrarAviso(this)">▱ &nbsp; Comentários</button>
-        <button class="menu-item" onclick="mostrarAviso(this)">▤ &nbsp; Relatórios</button>
+        <button class="menu-item ativo" onclick="mostrarView('dashboard', this)">▣ &nbsp; Dashboard</button>
+        <button class="menu-item" onclick="mostrarView('formularios', this)">▤ &nbsp; Formulários</button>
+        <button class="menu-item" onclick="mostrarView('comentarios', this)">▱ &nbsp; Comentários</button>
+        <button class="menu-item" onclick="mostrarAviso(this)">▥ &nbsp; Relatórios</button>
     </aside>
 
     <section class="dashboard-conteudo">
-        <div class="dashboard-topo">
-            <h1>Dashboard de Clima Organizacional</h1>
-            <button class="periodo">Últimos 30 dias ⌄</button>
-        </div>
 
-        <div class="cards">
-            <div class="card card-azul">
-                <small>Média Geral</small>
-                <strong id="mediaGeral">0.0</strong>
-                <span>de 10 pontos</span>
-                <div class="mini-grafico">▂▃▅▆▇</div>
+        <!-- ===================== VIEW: DASHBOARD ===================== -->
+        <div id="viewDashboard">
+            <div class="dashboard-topo">
+                <h1 id="dashboardTitulo">Dashboard de Clima Organizacional</h1>
             </div>
 
-            <div class="card">
-                <small>Total de Respostas</small>
-                <strong id="totalRespostas">0</strong>
-                <span>respostas registradas</span>
-            </div>
-
-            <div class="card">
-                <small>Taxa de Participação</small>
-                <strong id="taxaParticipacao">0%</strong>
-                <span>baseado nas respostas</span>
-            </div>
-
-            <div class="card">
-                <small>Última Atualização</small>
-                <strong class="data" id="ultimaAtualizacao">—</strong>
-                <span id="dataAtualizacao">Nenhuma resposta ainda</span>
-            </div>
-        </div>
-
-        <div class="duas-colunas">
-            <div class="painel">
-                <h3 class="titulo-vermelho">⚠ Pontos Críticos</h3>
-                <div class="linha-ponto">
-                    <span id="critico1Nome">Comunicação interna</span><b id="critico1Valor">—</b>
+            <div class="cards">
+                <div class="card card-azul">
+                    <small>Média Geral</small>
+                    <strong id="statMediaGeral">—</strong>
+                    <span>de 10 pontos</span>
                 </div>
-                <div class="linha-ponto">
-                    <span id="critico2Nome">Reconhecimento</span><b id="critico2Valor">—</b>
+
+                <div class="card">
+                    <small>Total de Respostas</small>
+                    <strong id="statTotalRespostas">—</strong>
+                    <span id="statRespostasDesde">&nbsp;</span>
+                </div>
+
+                <div class="card">
+                    <small>Taxa de Participação</small>
+                    <strong id="statTaxaParticipacao">—</strong>
+                    <span id="statTaxaDetalhe">&nbsp;</span>
+                </div>
+
+                <div class="card">
+                    <small>Última Atualização</small>
+                    <strong class="data" id="statUltimaAtualizacao">—</strong>
+                    <span id="statUltimaAtualizacaoData">&nbsp;</span>
                 </div>
             </div>
 
-            <div class="painel">
-                <h3 class="titulo-verde">♧ Pontos Fortes</h3>
-                <div class="linha-ponto">
-                    <span id="forte1Nome">Ambiente respeitoso e colaborativo</span><b id="forte1Valor">—</b>
+            <div class="duas-colunas">
+                <div class="painel">
+                    <h3 class="titulo-vermelho">⚠ Pontos Críticos</h3>
+                    <div id="pontosCriticos"><p class="aviso-vazio">Ainda sem dados suficientes</p></div>
                 </div>
-                <div class="linha-ponto">
-                    <span id="forte2Nome">Recomendaria a escola</span><b id="forte2Valor">—</b>
-                </div>
-            </div>
-        </div>
 
-        <div class="graficos">
-            <div class="painel">
-                <h3>Evolução Temporal</h3>
-                <div class="grafico-linha">
-                    <div class="linha-svg">
-                        <svg viewBox="0 0 500 180" preserveAspectRatio="none">
-                            <line x1="45" y1="150" x2="480" y2="150" stroke="#ddd"/>
-                            <line x1="45" y1="20" x2="45" y2="150" stroke="#ddd"/>
-                            <polyline points="45,90 150,80 255,70 360,62 475,55"
-                                fill="none" stroke="#1261d6" stroke-width="4"/>
-                            <circle cx="45" cy="90" r="5" fill="#1261d6"/>
-                            <circle cx="150" cy="80" r="5" fill="#1261d6"/>
-                            <circle cx="255" cy="70" r="5" fill="#1261d6"/>
-                            <circle cx="360" cy="62" r="5" fill="#1261d6"/>
-                            <circle cx="475" cy="55" r="5" fill="#1261d6"/>
-                        </svg>
-                    </div>
-                    <div class="meses"><span>Jan</span><span>Fev</span><span>Mar</span><span>Abr</span><span>Mai</span></div>
-                    <p class="tendencia">↑ Tendência positiva nos últimos 5 meses</p>
+                <div class="painel">
+                    <h3 class="titulo-verde">♧ Pontos Fortes</h3>
+                    <div id="pontosFortes"><p class="aviso-vazio">Ainda sem dados suficientes</p></div>
                 </div>
             </div>
 
-            <div class="painel">
-                <h3>Distribuição de Respostas</h3>
-                <div class="pizza-area">
-                    <div class="pizza"></div>
-                    <div class="legenda">
-                        <span><i class="vermelho"></i>0-3 (Insatisfeito)</span>
-                        <span><i class="amarelo"></i>4-6 (Neutro)</span>
-                        <span><i class="verde"></i>7-10 (Satisfeito)</span>
+            <div class="graficos">
+                <div class="painel">
+                    <h3>Evolução Temporal</h3>
+                    <div class="grafico-linha">
+                        <div class="linha-svg" id="graficoEvolucao"></div>
+                        <div class="meses" id="legendaEvolucao"></div>
+                        <p class="tendencia" id="textoTendencia"></p>
                     </div>
                 </div>
+
+                <div class="painel">
+                    <h3>Distribuição de Respostas</h3>
+                    <div class="pizza-area">
+                        <div class="pizza" id="graficoPizza"></div>
+                        <div class="legenda">
+                            <span><i class="vermelho"></i>0-3 (Insatisfeito)</span>
+                            <span><i class="amarelo"></i>4-6 (Neutro)</span>
+                            <span><i class="verde"></i>7-10 (Satisfeito)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== VIEW: FORMULÁRIOS ===================== -->
+        <div id="viewFormularios" class="escondido">
+            <div class="dashboard-topo">
+                <h1>Formulários</h1>
+            </div>
+
+            <div class="painel" style="margin-bottom:15px;">
+                <h3>Criar novo formulário</h3>
+                <label>Título</label>
+                <input id="novoFormTitulo" type="text" placeholder="Ex: Pesquisa de Clima — 2º Semestre 2026">
+
+                <label>Nº de funcionários esperados (opcional)</label>
+                <input id="novoFormEsperados" type="number" min="1" placeholder="Ex: 151">
+
+                <label>Perguntas (uma por linha)</label>
+                <textarea id="novoFormPerguntas" placeholder="Digite uma pergunta por linha..."></textarea>
+
+                <button class="botao azul-btn" onclick="criarFormulario()">Criar formulário</button>
+                <p id="erroNovoForm" class="erro"></p>
+            </div>
+
+            <div class="painel">
+                <h3>Formulários existentes</h3>
+                <div id="listaFormularios"><p class="aviso-vazio">Carregando...</p></div>
+            </div>
+        </div>
+
+        <!-- ===================== VIEW: COMENTÁRIOS ===================== -->
+        <div id="viewComentarios" class="escondido">
+            <div class="dashboard-topo">
+                <h1>Comentários</h1>
+            </div>
+
+            <div class="painel">
+                <div id="listaComentarios"><p class="aviso-vazio">Carregando...</p></div>
             </div>
         </div>
 

@@ -1,55 +1,75 @@
+-- ============================================================
+-- Pesquisa de Clima Organizacional — Banco de dados definitivo
+-- Anônimo, com suporte a múltiplos formulários (pesquisas)
+-- ============================================================
+
 CREATE DATABASE IF NOT EXISTS clima_tcc CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE clima_tcc;
 
+-- ------------------------------------------------------------
+-- gestores: quem acessa o painel administrativo
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS gestores (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(120) NOT NULL,
     email VARCHAR(180) NOT NULL UNIQUE,
     senha_hash VARCHAR(255) NOT NULL,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ------------------------------------------------------------
+-- formularios: cada edição/campanha da pesquisa de clima.
+-- Só um formulário fica com status = 'ativo' por vez — é ele
+-- que aparece pro público quando alguém acessa a pesquisa.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS formularios (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    titulo VARCHAR(150) NOT NULL,
+    descricao VARCHAR(255) NULL,
+    status ENUM('rascunho', 'ativo', 'encerrado') NOT NULL DEFAULT 'rascunho',
+    respondentes_esperados INT UNSIGNED NULL COMMENT 'opcional, só usado para calcular taxa de participação sem identificar ninguém',
+    data_abertura DATETIME NULL,
+    data_fechamento DATETIME NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- perguntas: pertencem a um formulário específico
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS perguntas (
-    id TINYINT UNSIGNED PRIMARY KEY,
-    texto VARCHAR(255) NOT NULL
-);
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    formulario_id INT UNSIGNED NOT NULL,
+    texto VARCHAR(255) NOT NULL,
+    ordem TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    CONSTRAINT fk_pergunta_formulario FOREIGN KEY (formulario_id)
+        REFERENCES formularios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ------------------------------------------------------------
+-- respostas: uma linha por envio de pesquisa. SEM vínculo com
+-- funcionário nenhum — é isso que garante o anonimato.
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS respostas (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    formulario_id INT UNSIGNED NOT NULL,
     comentario TEXT NULL,
-    criada_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+    criada_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_resposta_formulario FOREIGN KEY (formulario_id)
+        REFERENCES formularios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ------------------------------------------------------------
+-- resposta_itens: a nota (0-10) dada em cada pergunta, dentro
+-- de uma resposta
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS resposta_itens (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     resposta_id BIGINT UNSIGNED NOT NULL,
-    pergunta_id TINYINT UNSIGNED NOT NULL,
+    pergunta_id INT UNSIGNED NOT NULL,
     nota TINYINT UNSIGNED NOT NULL,
-    CONSTRAINT fk_item_resposta FOREIGN KEY (resposta_id) REFERENCES respostas(id) ON DELETE CASCADE,
-    CONSTRAINT fk_item_pergunta FOREIGN KEY (pergunta_id) REFERENCES perguntas(id),
-    CONSTRAINT chk_nota CHECK (nota BETWEEN 0 AND 10),
-    UNIQUE KEY uq_resposta_pergunta (resposta_id, pergunta_id)
-);
-
-INSERT INTO perguntas (id, texto) VALUES
-(1, 'O ambiente de trabalho é respeitoso e colaborativo'),
-(2, 'A comunicação interna é clara e eficiente'),
-(3, 'Tenho os recursos necessários para realizar meu trabalho'),
-(4, 'Sinto que meu trabalho é reconhecido'),
-(5, 'Tenho boas oportunidades de desenvolvimento'),
-(6, 'A liderança está aberta para ouvir os funcionários'),
-(7, 'Existe equilíbrio entre trabalho e vida pessoal'),
-(8, 'Sinto-me seguro para dar minha opinião'),
-(9, 'As decisões da empresa são comunicadas de forma clara'),
-(10, 'Eu recomendaria esta empresa como um bom lugar para trabalhar')
-ON DUPLICATE KEY UPDATE texto = VALUES(texto);
-
--- Senha de teste: 123456
--- O hash abaixo é gerado para uso apenas no projeto de TCC.
-INSERT INTO gestores (nome, email, senha_hash)
-VALUES (
-    'Gestor',
-    'gestor@escola.com',
-    '$2y$12$MN38/tKqe3nloC8DcRmn5OlZB8bgTE/pIpiaPKWHWGniphfxNl7Iu'
-)
-ON DUPLICATE KEY UPDATE nome = VALUES(nome);
+    CONSTRAINT fk_item_resposta FOREIGN KEY (resposta_id)
+        REFERENCES respostas(id) ON DELETE CASCADE,
+    CONSTRAINT fk_item_pergunta FOREIGN KEY (pergunta_id)
+        REFERENCES perguntas(id) ON DELETE CASCADE,
+    CONSTRAINT chk_nota CHECK (nota BETWEEN 0 AND 10)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

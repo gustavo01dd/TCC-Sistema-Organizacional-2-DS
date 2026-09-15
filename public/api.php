@@ -1,173 +1,356 @@
 <?php
-declare(strict_types=1);
-
+require_once __DIR__ . '/config.php';
 session_start();
+
 header('Content-Type: application/json; charset=utf-8');
 
-function resposta(array $dados, int $status = 200): never {
-    http_response_code($status);
-    echo json_encode($dados, JSON_UNESCAPED_UNICODE);
-    exit;
-}
+$action = $_GET['action'] ?? '';
+$metodo = $_SERVER['REQUEST_METHOD'];
 
-function lerJson(): array {
+function corpoJson() {
     $dados = json_decode(file_get_contents('php://input'), true);
     return is_array($dados) ? $dados : [];
 }
 
-function conectar(): PDO {
-    $host = getenv('DB_HOST') ?: 'mariadb';
-    $db   = getenv('DB_DATABASE') ?: 'clima_tcc';
-    $user = getenv('DB_USER') ?: 'clima_user';
-    $pass = getenv('DB_PASSWORD') ?: 'clima_pass';
-
-    return new PDO(
-        "mysql:host={$host};dbname={$db};charset=utf8mb4",
-        $user,
-        $pass,
-        [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-        ]
-    );
+function exigirGestor() {
+    if (empty($_SESSION['gestor_id'])) {
+        http_response_code(401);
+        echo json_encode(['erro' => 'Não autenticado']);
+        exit;
+    }
 }
 
-try {
-    $pdo = conectar();
-    $action = $_GET['action'] ?? '';
+function exigirMetodo($esperado) {
+    global $metodo;
+    if ($metodo !== $esperado) {
+        http_response_code(405);
+        echo json_encode(['erro' => 'Método inválido']);
+        exit;
+    }
+}
 
-    if ($action === 'salvar_pesquisa') {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            resposta(['sucesso' => false, 'mensagem' => 'Método não permitido.'], 405);
+switch ($action) {
+
+    // ---------------------------------------------------------
+    // PÚBLICO: pesquisa
+    // ---------------------------------------------------------
+
+    case 'formulario_ativo':
+        $stmt = $pdo->query("SELECT id, titulo, descricao FROM formularios WHERE status = 'ativo' ORDER BY data_abertura DESC LIMIT 1");
+        $formulario = $stmt->fetch();
+
+        if (!$formulario) {
+            http_response_code(404);
+            echo json_encode(['erro' => 'Nenhuma pesquisa ativa no momento']);
+            break;
         }
 
-        $dados = lerJson();
-        $notas = $dados['notas'] ?? [];
+        $stmtP = $pdo->prepare("SELECT id, texto FROM perguntas WHERE formulario_id = ? ORDER BY ordem, id");
+        $stmtP->execute([$formulario['id']]);
+        $formulario['perguntas'] = $stmtP->fetchAll();
+
+        echo json_encode($formulario);
+        break;
+
+    case 'enviar_resposta':
+        exigirMetodo('POST');
+        $dados = corpoJson();
+        $formularioId = $dados['formulario_id'] ?? null;
+        $itens = $dados['respostas'] ?? [];
         $comentario = trim((string)($dados['comentario'] ?? ''));
 
-        if (!is_array($notas) || count($notas) !== 10) {
-            resposta(['sucesso' => false, 'mensagem' => 'A pesquisa precisa ter 10 respostas.'], 422);
+        if (!$formularioId || !is_array($itens) || count($itens) === 0) {
+            http_response_code(400);
+            echo json_encode(['erro' => 'Dados incompletos']);
+            break;
         }
 
-        foreach ($notas as $nota) {
-            if (!is_numeric($nota) || (int)$nota < 0 || (int)$nota > 10) {
-                resposta(['sucesso' => false, 'mensagem' => 'Existe uma nota inválida.'], 422);
+        // confere se o formulário ainda está ativo (evita enviar pra pesquisa já encerrada)
+        $stmt = $pdo->prepare("SELECT id FROM formularios WHERE id = ? AND status = 'ativo'");
+        $stmt->execute([$formularioId]);
+        if (!$stmt->fetch()) {
+            http_response_code(409);
+            echo json_encode(['erro' => 'Esta pesquisa não está mais ativa']);
+            break;
+        }
+
+        try {
+            $pdo->beginTransaction();
+
+            $stmt = $pdo->prepare("INSERT INTO respostas (formulario_id, comentario) VALUES (?, ?)");
+            $stmt->execute([$formularioId, $comentario !== '' ? $comentario : null]);
+            $respostaId = $pdo->lastInsertId();
+
+            $stmtItem = $pdo->prepare("INSERT INTO resposta_itens (resposta_id, pergunta_id, nota) VALUES (?, ?, ?)");
+            foreach ($itens as $item) {
+                $perguntaId = (int)($item['pergunta_id'] ?? 0);
+                $nota = max(0, min(10, (int)($item['nota'] ?? 0)));
+                if ($perguntaId <= 0) continue;
+                $stmtItem->execute([$respostaId, $perguntaId, $nota]);
             }
+
+            $pdo->commit();
+            echo json_encode(['sucesso' => true]);
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            http_response_code(500);
+            echo json_encode(['erro' => 'Não foi possível salvar a resposta']);
         }
+        break;
 
-        $pdo->beginTransaction();
+    // ---------------------------------------------------------
+    // AUTENTICAÇÃO DO GESTOR
+    // ---------------------------------------------------------
 
-        $stmt = $pdo->prepare(
-            "INSERT INTO respostas (comentario, criada_em) VALUES (:comentario, NOW())"
-        );
-        $stmt->execute(['comentario' => $comentario !== '' ? $comentario : null]);
-        $respostaId = (int)$pdo->lastInsertId();
-
-        $stmtItem = $pdo->prepare(
-            "INSERT INTO resposta_itens (resposta_id, pergunta_id, nota)
-             VALUES (:resposta_id, :pergunta_id, :nota)"
-        );
-
-        foreach ($notas as $indice => $nota) {
-            $stmtItem->execute([
-                'resposta_id' => $respostaId,
-                'pergunta_id' => $indice + 1,
-                'nota' => (int)$nota
-            ]);
-        }
-
-        $pdo->commit();
-        resposta(['sucesso' => true]);
-    }
-
-    if ($action === 'login') {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            resposta(['sucesso' => false, 'mensagem' => 'Método não permitido.'], 405);
-        }
-
-        $dados = lerJson();
+    case 'login':
+        exigirMetodo('POST');
+        $dados = corpoJson();
         $email = trim((string)($dados['email'] ?? ''));
         $senha = (string)($dados['senha'] ?? '');
 
-        $stmt = $pdo->prepare("SELECT id, nome, email, senha_hash FROM gestores WHERE email = :email LIMIT 1");
-        $stmt->execute(['email' => $email]);
+        $stmt = $pdo->prepare("SELECT id, nome, senha_hash FROM gestores WHERE email = ?");
+        $stmt->execute([$email]);
         $gestor = $stmt->fetch();
 
-        if (!$gestor || !password_verify($senha, $gestor['senha_hash'])) {
-            resposta(['sucesso' => false, 'mensagem' => 'Email ou senha incorretos.'], 401);
+        if ($gestor && password_verify($senha, $gestor['senha_hash'])) {
+            session_regenerate_id(true);
+            $_SESSION['gestor_id'] = $gestor['id'];
+            $_SESSION['gestor_nome'] = $gestor['nome'];
+            echo json_encode(['sucesso' => true, 'nome' => $gestor['nome']]);
+        } else {
+            http_response_code(401);
+            echo json_encode(['erro' => 'Email ou senha incorretos']);
         }
+        break;
 
-        session_regenerate_id(true);
-        $_SESSION['gestor_id'] = (int)$gestor['id'];
-        $_SESSION['gestor_nome'] = $gestor['nome'];
-
-        resposta(['sucesso' => true, 'nome' => $gestor['nome']]);
-    }
-
-    if ($action === 'logout') {
+    case 'logout':
         $_SESSION = [];
-        if (ini_get('session.use_cookies')) {
-            $params = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000,
-                $params['path'], $params['domain'], $params['secure'], $params['httponly']
-            );
-        }
         session_destroy();
-        resposta(['sucesso' => true]);
-    }
+        echo json_encode(['sucesso' => true]);
+        break;
 
-    if ($action === 'dashboard') {
-        if (empty($_SESSION['gestor_id'])) {
-            resposta(['sucesso' => false, 'mensagem' => 'Acesso não autorizado.'], 401);
+    // ---------------------------------------------------------
+    // GESTOR: gerenciar formulários
+    // ---------------------------------------------------------
+
+    case 'formularios':
+        exigirGestor();
+        $stmt = $pdo->query("
+            SELECT f.id, f.titulo, f.status, f.respondentes_esperados,
+                   f.data_abertura, f.data_fechamento,
+                   (SELECT COUNT(*) FROM respostas r WHERE r.formulario_id = f.id) AS total_respostas
+            FROM formularios f
+            ORDER BY f.criado_em DESC
+        ");
+        echo json_encode($stmt->fetchAll());
+        break;
+
+    case 'criar_formulario':
+        exigirGestor();
+        exigirMetodo('POST');
+        $dados = corpoJson();
+        $titulo = trim((string)($dados['titulo'] ?? ''));
+        $descricao = trim((string)($dados['descricao'] ?? ''));
+        $perguntasTexto = $dados['perguntas'] ?? [];
+        $respondentesEsperados = !empty($dados['respondentes_esperados']) ? (int)$dados['respondentes_esperados'] : null;
+
+        $perguntasValidas = array_values(array_filter(array_map('trim', is_array($perguntasTexto) ? $perguntasTexto : []), fn($t) => $t !== ''));
+
+        if ($titulo === '' || count($perguntasValidas) < 1) {
+            http_response_code(400);
+            echo json_encode(['erro' => 'Informe um título e ao menos uma pergunta']);
+            break;
         }
 
-        $media = (float)$pdo->query("SELECT COALESCE(AVG(nota), 0) FROM resposta_itens")->fetchColumn();
-        $total = (int)$pdo->query("SELECT COUNT(*) FROM respostas")->fetchColumn();
+        try {
+            $pdo->beginTransaction();
 
-        $ultima = $pdo->query(
-            "SELECT DATE_FORMAT(criada_em, '%d/%m/%Y %H:%i') AS data_formatada
-             FROM respostas ORDER BY criada_em DESC LIMIT 1"
-        )->fetchColumn();
+            $stmt = $pdo->prepare("INSERT INTO formularios (titulo, descricao, respondentes_esperados, status) VALUES (?, ?, ?, 'rascunho')");
+            $stmt->execute([$titulo, $descricao !== '' ? $descricao : null, $respondentesEsperados]);
+            $formularioId = $pdo->lastInsertId();
 
-        $perguntas = $pdo->query(
-            "SELECT p.id, p.texto, COALESCE(AVG(ri.nota), 0) AS media
-             FROM perguntas p
-             LEFT JOIN resposta_itens ri ON ri.pergunta_id = p.id
-             GROUP BY p.id, p.texto
-             ORDER BY media ASC"
-        )->fetchAll();
+            $stmtP = $pdo->prepare("INSERT INTO perguntas (formulario_id, texto, ordem) VALUES (?, ?, ?)");
+            $ordem = 1;
+            foreach ($perguntasValidas as $texto) {
+                $stmtP->execute([$formularioId, $texto, $ordem]);
+                $ordem++;
+            }
 
-        $pontosCriticos = array_slice($perguntas, 0, 2);
-        usort($perguntas, fn($a, $b) => (float)$b['media'] <=> (float)$a['media']);
-        $pontosFortes = array_slice($perguntas, 0, 2);
+            $pdo->commit();
+            echo json_encode(['sucesso' => true, 'formulario_id' => $formularioId]);
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            http_response_code(500);
+            echo json_encode(['erro' => 'Não foi possível criar o formulário']);
+        }
+        break;
 
-        $formatar = function(array $item): array {
-            return [
-                'nome' => $item['texto'],
-                'media' => (float)$item['media']
-            ];
-        };
+    case 'alterar_status_formulario':
+        exigirGestor();
+        exigirMetodo('POST');
+        $dados = corpoJson();
+        $formularioId = (int)($dados['formulario_id'] ?? 0);
+        $novoStatus = $dados['status'] ?? '';
 
-        // Sem uma tabela de funcionários, a taxa é apenas um indicador demonstrativo.
-        $taxaParticipacao = $total > 0 ? 100 : 0;
+        if (!$formularioId || !in_array($novoStatus, ['rascunho', 'ativo', 'encerrado'], true)) {
+            http_response_code(400);
+            echo json_encode(['erro' => 'Dados inválidos']);
+            break;
+        }
 
-        resposta([
-            'sucesso' => true,
-            'media_geral' => round($media, 1),
-            'total_respostas' => $total,
+        try {
+            $pdo->beginTransaction();
+
+            if ($novoStatus === 'ativo') {
+                // só um formulário ativo por vez
+                $pdo->exec("UPDATE formularios SET status = 'encerrado', data_fechamento = NOW() WHERE status = 'ativo'");
+                $stmt = $pdo->prepare("UPDATE formularios SET status = 'ativo', data_abertura = COALESCE(data_abertura, NOW()) WHERE id = ?");
+            } elseif ($novoStatus === 'encerrado') {
+                $stmt = $pdo->prepare("UPDATE formularios SET status = 'encerrado', data_fechamento = NOW() WHERE id = ?");
+            } else {
+                $stmt = $pdo->prepare("UPDATE formularios SET status = ? WHERE id = ?");
+                $stmt->execute([$novoStatus, $formularioId]);
+                $pdo->commit();
+                echo json_encode(['sucesso' => true]);
+                break;
+            }
+
+            $stmt->execute([$formularioId]);
+            $pdo->commit();
+            echo json_encode(['sucesso' => true]);
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            http_response_code(500);
+            echo json_encode(['erro' => 'Não foi possível atualizar o status']);
+        }
+        break;
+
+    // ---------------------------------------------------------
+    // GESTOR: dashboard e comentários
+    // ---------------------------------------------------------
+
+    case 'dashboard':
+        exigirGestor();
+        $formularioId = isset($_GET['formulario_id']) ? (int)$_GET['formulario_id'] : null;
+
+        if (!$formularioId) {
+            $stmt = $pdo->query("SELECT id FROM formularios WHERE status = 'ativo' ORDER BY data_abertura DESC LIMIT 1");
+            $ativo = $stmt->fetch();
+            $formularioId = $ativo['id'] ?? null;
+        }
+
+        if (!$formularioId) {
+            echo json_encode(['erro' => 'Nenhum formulário encontrado']);
+            break;
+        }
+
+        $stmt = $pdo->prepare("SELECT * FROM formularios WHERE id = ?");
+        $stmt->execute([$formularioId]);
+        $formulario = $stmt->fetch();
+
+        if (!$formulario) {
+            http_response_code(404);
+            echo json_encode(['erro' => 'Formulário não encontrado']);
+            break;
+        }
+
+        $stmt = $pdo->prepare("SELECT COUNT(*) AS total FROM respostas WHERE formulario_id = ?");
+        $stmt->execute([$formularioId]);
+        $totalRespostas = (int)$stmt->fetch()['total'];
+
+        $stmt = $pdo->prepare("
+            SELECT AVG(ri.nota) AS media
+            FROM resposta_itens ri
+            JOIN respostas r ON r.id = ri.resposta_id
+            WHERE r.formulario_id = ?
+        ");
+        $stmt->execute([$formularioId]);
+        $mediaGeral = round((float)($stmt->fetch()['media'] ?? 0), 1);
+
+        $stmt = $pdo->prepare("
+            SELECT p.id, p.texto, AVG(ri.nota) AS media
+            FROM perguntas p
+            LEFT JOIN resposta_itens ri ON ri.pergunta_id = p.id
+            WHERE p.formulario_id = ?
+            GROUP BY p.id, p.texto
+            ORDER BY media ASC
+        ");
+        $stmt->execute([$formularioId]);
+        $porPergunta = $stmt->fetchAll();
+        foreach ($porPergunta as &$p) {
+            $p['media'] = $p['media'] !== null ? round((float)$p['media'], 1) : null;
+        }
+        unset($p);
+
+        $stmt = $pdo->prepare("
+            SELECT AVG(ri.nota) AS media
+            FROM respostas r
+            JOIN resposta_itens ri ON ri.resposta_id = r.id
+            WHERE r.formulario_id = ?
+            GROUP BY r.id
+        ");
+        $stmt->execute([$formularioId]);
+        $medias = array_column($stmt->fetchAll(), 'media');
+        $dist = ['insatisfeito' => 0, 'neutro' => 0, 'satisfeito' => 0];
+        foreach ($medias as $m) {
+            $m = (float)$m;
+            if ($m <= 3) $dist['insatisfeito']++;
+            elseif ($m <= 6) $dist['neutro']++;
+            else $dist['satisfeito']++;
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT DATE(criada_em) AS dia, COUNT(*) AS total
+            FROM respostas
+            WHERE formulario_id = ?
+            GROUP BY DATE(criada_em)
+            ORDER BY dia
+        ");
+        $stmt->execute([$formularioId]);
+        $evolucao = $stmt->fetchAll();
+
+        $taxaParticipacao = null;
+        if (!empty($formulario['respondentes_esperados'])) {
+            $taxaParticipacao = round(($totalRespostas / $formulario['respondentes_esperados']) * 100);
+        }
+
+        echo json_encode([
+            'formulario' => $formulario,
+            'total_respostas' => $totalRespostas,
+            'media_geral' => $mediaGeral,
             'taxa_participacao' => $taxaParticipacao,
-            'ultima_atualizacao' => $ultima ? 'Atualizado' : null,
-            'ultima_atualizacao_completa' => $ultima ?: null,
-            'pontos_criticos' => array_map($formatar, $pontosCriticos),
-            'pontos_fortes' => array_map($formatar, $pontosFortes)
+            'por_pergunta' => $porPergunta,
+            'distribuicao' => $dist,
+            'evolucao' => $evolucao,
         ]);
-    }
+        break;
 
-    resposta(['sucesso' => false, 'mensagem' => 'Ação não encontrada.'], 404);
+    case 'comentarios':
+        exigirGestor();
+        $formularioId = isset($_GET['formulario_id']) ? (int)$_GET['formulario_id'] : null;
 
-} catch (Throwable $e) {
-    if (isset($pdo) && $pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
-    resposta(['sucesso' => false, 'mensagem' => 'Erro interno do servidor.'], 500);
+        if (!$formularioId) {
+            $stmt = $pdo->query("SELECT id FROM formularios WHERE status = 'ativo' ORDER BY data_abertura DESC LIMIT 1");
+            $ativo = $stmt->fetch();
+            $formularioId = $ativo['id'] ?? null;
+        }
+
+        if (!$formularioId) {
+            echo json_encode([]);
+            break;
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT comentario, criada_em
+            FROM respostas
+            WHERE formulario_id = ? AND comentario IS NOT NULL AND comentario <> ''
+            ORDER BY criada_em DESC
+        ");
+        $stmt->execute([$formularioId]);
+        echo json_encode($stmt->fetchAll());
+        break;
+
+    default:
+        http_response_code(404);
+        echo json_encode(['erro' => 'Ação não encontrada']);
 }

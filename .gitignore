@@ -1,1 +1,3 @@
 docker/mariadb_data/
+*.log
+.env

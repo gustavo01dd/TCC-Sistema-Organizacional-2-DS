@@ -163,6 +163,13 @@ h1 {
     margin-bottom: 25px;
 }
 
+.formulario-titulo-ativo {
+    color: #075fd3;
+    font-weight: bold;
+    font-size: 15px;
+    margin-bottom: 15px;
+}
+
 .progresso-topo {
     margin-bottom: 25px;
 }
@@ -403,13 +410,6 @@ textarea {
     font-size: 30px;
 }
 
-.periodo {
-    background: white;
-    border: 1px solid #ddd;
-    padding: 12px 18px;
-    border-radius: 8px;
-}
-
 .cards {
     display: grid;
     grid-template-columns: 1.2fr 1fr 1fr 1fr;
@@ -450,11 +450,6 @@ textarea {
     color: white;
 }
 
-.mini-grafico {
-    margin-top: 8px;
-    opacity: .8;
-}
-
 .data {
     font-size: 22px !important;
 }
@@ -488,6 +483,7 @@ textarea {
 .linha-ponto {
     display: flex;
     justify-content: space-between;
+    gap: 12px;
     padding: 15px 0;
     border-bottom: 1px solid #eee;
 }
@@ -498,11 +494,16 @@ textarea {
 
 .linha-ponto b {
     color: #c33b45;
+    white-space: nowrap;
 }
 
-.titulo-verde + .linha-ponto b,
-.graficos .tendencia {
+.titulo-verde + div .linha-ponto b {
     color: #15945d;
+}
+
+.aviso-vazio {
+    color: #64748b;
+    padding: 10px 0;
 }
 
 .grafico-linha {
@@ -527,6 +528,7 @@ textarea {
 .tendencia {
     text-align: center;
     font-size: 13px;
+    color: #15945d;
 }
 
 .pizza-area {
@@ -541,11 +543,7 @@ textarea {
     width: 160px;
     height: 160px;
     border-radius: 50%;
-    background: conic-gradient(
-        #199b62 0 60%,
-        #c7a000 60% 88%,
-        #c63e3e 88% 100%
-    );
+    background: #e7eaf0;
 }
 
 .legenda span {
@@ -576,6 +574,115 @@ textarea {
     cursor: pointer;
 }
 
+/* ===================== Formulários (gestão) ===================== */
+
+.painel label {
+    display: block;
+    font-weight: bold;
+    margin: 14px 0 6px;
+}
+
+.painel label:first-of-type {
+    margin-top: 0;
+}
+
+.painel input[type="text"],
+.painel input[type="number"],
+.painel textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #d7dce4;
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+.painel textarea {
+    min-height: 120px;
+}
+
+.painel .botao {
+    margin-top: 20px;
+    padding: 14px;
+    font-size: 16px;
+}
+
+.item-formulario {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    padding: 16px 0;
+    border-bottom: 1px solid #eee;
+    flex-wrap: wrap;
+}
+
+.item-formulario:last-child {
+    border-bottom: 0;
+}
+
+.item-formulario small {
+    color: #64748b;
+}
+
+.acoes-formulario {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.botao-pequeno {
+    border: 1px solid #075fd3;
+    background: white;
+    color: #075fd3;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.botao-pequeno:hover {
+    background: #eaf1ff;
+}
+
+.botao-encerrar {
+    border-color: #c63e3e;
+    color: #c63e3e;
+}
+
+.botao-encerrar:hover {
+    background: #fdeeee;
+}
+
+.status-ativo, .status-encerrado, .status-rascunho {
+    font-size: 12px;
+    font-weight: bold;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-left: 8px;
+}
+
+.status-ativo { background: #e3f6ec; color: #15945d; }
+.status-encerrado { background: #f4e4e4; color: #c33b45; }
+.status-rascunho { background: #f0f1f4; color: #64748b; }
+
+.comentario-item {
+    padding: 15px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.comentario-item:last-child {
+    border-bottom: 0;
+}
+
+.comentario-item p {
+    margin: 0 0 5px;
+}
+
+.comentario-item small {
+    color: #64748b;
+}
+
 @media (max-width: 900px) {
     .cards, .duas-colunas, .graficos {
         grid-template-columns: 1fr;
@@ -587,10 +694,6 @@ textarea {
 
     .dashboard-topo {
         display: block;
-    }
-
-    .periodo {
-        margin-top: 10px;
     }
 }
 
@@ -610,92 +713,9 @@ textarea {
     .pizza-area {
         flex-direction: column;
     }
-}
 
-
-/* =========================================================
-   AJUSTES DA VERSÃO INTEGRADA COM PHP + BANCO DE DADOS
-   ========================================================= */
-
-/* Evita que mensagens retornadas pelo PHP quebrem o layout */
-.mensagem-sucesso {
-    margin: 15px 0;
-    padding: 12px 15px;
-    border-radius: 8px;
-    background: #eaf8f0;
-    color: #147a4b;
-    border: 1px solid #bfe8cf;
-}
-
-.mensagem-erro {
-    margin: 15px 0;
-    padding: 12px 15px;
-    border-radius: 8px;
-    background: #fff1f1;
-    color: #b42318;
-    border: 1px solid #f0c4c0;
-}
-
-/* Campos usados no envio/login via PHP */
-input:focus,
-textarea:focus {
-    outline: none;
-    border-color: #075fd3;
-    box-shadow: 0 0 0 3px rgba(7, 95, 211, .10);
-}
-
-/* Estado do botão enquanto o PHP processa a requisição */
-.botao:disabled {
-    opacity: .65;
-    cursor: not-allowed;
-}
-
-/* Transição suave da barra de progresso */
-#barraProgresso {
-    transition: width .2s ease;
-}
-
-/* Melhor comportamento dos cartões quando o conteúdo
-   vem dinamicamente do banco */
-.linha-ponto {
-    gap: 15px;
-}
-
-.linha-ponto b {
-    white-space: nowrap;
-}
-
-/* Pequena melhoria para telas menores */
-@media (max-width: 1100px) {
-    .cards {
-        grid-template-columns: 1fr 1fr;
-    }
-}
-
-@media (max-width: 650px) {
-    .conteudo {
-        width: 94%;
-        padding-top: 25px;
-    }
-
-    .pergunta-card {
-        padding: 20px;
-    }
-
-    .pergunta-titulo {
-        font-size: 17px;
-    }
-
-    .numeros {
-        font-size: 12px;
-        gap: 3px;
-    }
-
-    .numeros small {
-        font-size: 9px;
-    }
-
-    .login-card {
-        padding: 25px;
+    .item-formulario {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
