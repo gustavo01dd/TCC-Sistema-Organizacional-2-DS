@@ -36,7 +36,8 @@ switch ($action) {
     // ---------------------------------------------------------
 
     case 'formulario_ativo':
-        $stmt = $pdo->query("SELECT id, titulo, descricao FROM formularios WHERE status = 'ativo' ORDER BY data_abertura DESC LIMIT 1");
+        $stmt = $pdo->query("SELECT id, titulo, descricao FROM formulariosWHERE status = 'ativo'AND (data_abertura IS NULL OR data_abertura <= NOW())AND (data_fechamento IS NULL OR data_fechamento >= NOW())ORDER BY data_abertura DESC LIMIT 1
+");
         $formulario = $stmt->fetch();
 
         if (!$formulario) {
@@ -153,6 +154,8 @@ switch ($action) {
         $descricao = trim((string)($dados['descricao'] ?? ''));
         $perguntasTexto = $dados['perguntas'] ?? [];
         $respondentesEsperados = !empty($dados['respondentes_esperados']) ? (int)$dados['respondentes_esperados'] : null;
+        $dataAbertura = !empty($dados['data_abertura']) ? $dados['data_abertura'] : null;
+        $dataFechamento = !empty($dados['data_fechamento']) ? $dados['data_fechamento'] : null;
 
         $perguntasValidas = array_values(array_filter(array_map('trim', is_array($perguntasTexto) ? $perguntasTexto : []), fn($t) => $t !== ''));
 
@@ -162,6 +165,12 @@ switch ($action) {
             break;
         }
 
+        if ($dataAbertura && $dataFechamento && strtotime($dataFechamento) <= strtotime($dataAbertura)) {
+        http_response_code(400);
+        echo json_encode(['erro' => 'A data de término deve ser depois da data de início']);
+        break;
+}
+
         try {
             $pdo->beginTransaction();
 
@@ -169,7 +178,9 @@ switch ($action) {
             $stmt->execute([$titulo, $descricao !== '' ? $descricao : null, $respondentesEsperados]);
             $formularioId = $pdo->lastInsertId();
 
-            $stmtP = $pdo->prepare("INSERT INTO perguntas (formulario_id, texto, ordem) VALUES (?, ?, ?)");
+            $stmt = $pdo->prepare("INSERT INTO formularios (titulo, descricao, respondentes_esperados, status, data_abertura, data_fechamento)
+            VALUES (?, ?, ?, 'rascunho', ?, ?)");
+            $stmt->execute([$titulo, $descricao !== '' ? $descricao : null, $respondentesEsperados, $dataAbertura, $dataFechamento]);
             $ordem = 1;
             foreach ($perguntasValidas as $texto) {
                 $stmtP->execute([$formularioId, $texto, $ordem]);

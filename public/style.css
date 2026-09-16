@@ -719,3 +719,14 @@ textarea {
         align-items: flex-start;
     }
 }
+
+.painel input[type="text"],
+.painel input[type="number"],
+.painel input[type="datetime-local"],
+.painel textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #d7dce4;
+    border-radius: 8px;
+    font-size: 15px;
+}

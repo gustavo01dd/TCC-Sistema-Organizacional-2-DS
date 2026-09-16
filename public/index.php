@@ -212,6 +212,11 @@
                 <label>Nº de funcionários esperados (opcional)</label>
                 <input id="novoFormEsperados" type="number" min="1" placeholder="Ex: 151">
 
+                <label>Data de início (opcional)</label>
+                <input id="novoFormInicio" type="datetime-local">
+                <label>Data de término (opcional)</label>
+                <input id="novoFormFim" type="datetime-local">
+
                 <label>Perguntas (uma por linha)</label>
                 <textarea id="novoFormPerguntas" placeholder="Digite uma pergunta por linha..."></textarea>
 

@@ -417,6 +417,10 @@ function renderizarListaFormularios(lista) {
     }).join("");
 }
 
+function paraDatetimeMysql(valor) {
+    if (!valor) return null;
+    return valor.replace("T", " ") + ":00";
+}
 async function criarFormulario() {
     var titulo = document.getElementById("novoFormTitulo").value.trim();
     var esperados = document.getElementById("novoFormEsperados").value;
@@ -439,7 +443,9 @@ async function criarFormulario() {
             body: JSON.stringify({
                 titulo: titulo,
                 respondentes_esperados: esperados ? Number(esperados) : null,
-                perguntas: perguntasTexto
+                perguntas: perguntasTexto,
+                data_inicio: paraDatetimeMysql(document.getElementById("novoFormInicio").value),
+                data_termino: paraDatetimeMysql(document.getElementById("novoFormFim").value)   
             })
         });
 
@@ -449,6 +455,8 @@ async function criarFormulario() {
             erroEl.innerText = "";
             document.getElementById("novoFormTitulo").value = "";
             document.getElementById("novoFormEsperados").value = "";
+            document.getElementById("novoFormInicio").value = "";
+            document.getElementById("novoFormFim").value = "";
             document.getElementById("novoFormPerguntas").value = "";
             carregarListaFormularios();
         } else {
