@@ -36,8 +36,7 @@ switch ($action) {
     // ---------------------------------------------------------
 
     case 'formulario_ativo':
-        $stmt = $pdo->query("SELECT id, titulo, descricao FROM formulariosWHERE status = 'ativo'AND (data_abertura IS NULL OR data_abertura <= NOW())AND (data_fechamento IS NULL OR data_fechamento >= NOW())ORDER BY data_abertura DESC LIMIT 1
-");
+        $stmt = $pdo->query("SELECT id, titulo, descricao FROM formularios WHERE status = 'ativo' AND (data_abertura IS NULL OR data_abertura <= NOW()) AND (data_fechamento IS NULL OR data_fechamento >= NOW()) ORDER BY data_abertura DESC LIMIT 1");
         $formulario = $stmt->fetch();
 
         if (!$formulario) {
@@ -147,54 +146,52 @@ switch ($action) {
         break;
 
     case 'criar_formulario':
-        exigirGestor();
-        exigirMetodo('POST');
-        $dados = corpoJson();
-        $titulo = trim((string)($dados['titulo'] ?? ''));
-        $descricao = trim((string)($dados['descricao'] ?? ''));
-        $perguntasTexto = $dados['perguntas'] ?? [];
-        $respondentesEsperados = !empty($dados['respondentes_esperados']) ? (int)$dados['respondentes_esperados'] : null;
-        $dataAbertura = !empty($dados['data_abertura']) ? $dados['data_abertura'] : null;
-        $dataFechamento = !empty($dados['data_fechamento']) ? $dados['data_fechamento'] : null;
+    exigirGestor();
+    exigirMetodo('POST');
+    $dados = corpoJson();
+    $titulo = trim((string)($dados['titulo'] ?? ''));
+    $descricao = trim((string)($dados['descricao'] ?? ''));
+    $perguntasTexto = $dados['perguntas'] ?? [];
+    $respondentesEsperados = !empty($dados['respondentes_esperados']) ? (int)$dados['respondentes_esperados'] : null;
+    $dataAbertura = !empty($dados['data_abertura']) ? $dados['data_abertura'] : null;
+    $dataFechamento = !empty($dados['data_fechamento']) ? $dados['data_fechamento'] : null;
 
-        $perguntasValidas = array_values(array_filter(array_map('trim', is_array($perguntasTexto) ? $perguntasTexto : []), fn($t) => $t !== ''));
+    $perguntasValidas = array_values(array_filter(array_map('trim', is_array($perguntasTexto) ? $perguntasTexto : []), fn($t) => $t !== ''));
 
-        if ($titulo === '' || count($perguntasValidas) < 1) {
-            http_response_code(400);
-            echo json_encode(['erro' => 'Informe um título e ao menos uma pergunta']);
-            break;
-        }
+    if ($titulo === '' || count($perguntasValidas) < 1) {
+        http_response_code(400);
+        echo json_encode(['erro' => 'Informe um título e ao menos uma pergunta']);
+        break;
+    }
 
-        if ($dataAbertura && $dataFechamento && strtotime($dataFechamento) <= strtotime($dataAbertura)) {
+    if ($dataAbertura && $dataFechamento && strtotime($dataFechamento) <= strtotime($dataAbertura)) {
         http_response_code(400);
         echo json_encode(['erro' => 'A data de término deve ser depois da data de início']);
         break;
-}
+    }
 
-        try {
-            $pdo->beginTransaction();
+    try {
+        $pdo->beginTransaction();
 
-            $stmt = $pdo->prepare("INSERT INTO formularios (titulo, descricao, respondentes_esperados, status) VALUES (?, ?, ?, 'rascunho')");
-            $stmt->execute([$titulo, $descricao !== '' ? $descricao : null, $respondentesEsperados]);
-            $formularioId = $pdo->lastInsertId();
+        $stmt = $pdo->prepare("INSERT INTO formularios (titulo, descricao, respondentes_esperados, status, data_abertura, data_fechamento) VALUES (?, ?, ?, 'rascunho', ?, ?)");
+        $stmt->execute([$titulo, $descricao !== '' ? $descricao : null, $respondentesEsperados, $dataAbertura, $dataFechamento]);
+        $formularioId = $pdo->lastInsertId();
 
-            $stmt = $pdo->prepare("INSERT INTO formularios (titulo, descricao, respondentes_esperados, status, data_abertura, data_fechamento)
-            VALUES (?, ?, ?, 'rascunho', ?, ?)");
-            $stmt->execute([$titulo, $descricao !== '' ? $descricao : null, $respondentesEsperados, $dataAbertura, $dataFechamento]);
-            $ordem = 1;
-            foreach ($perguntasValidas as $texto) {
-                $stmtP->execute([$formularioId, $texto, $ordem]);
-                $ordem++;
-            }
-
-            $pdo->commit();
-            echo json_encode(['sucesso' => true, 'formulario_id' => $formularioId]);
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            http_response_code(500);
-            echo json_encode(['erro' => 'Não foi possível criar o formulário']);
+        $stmtP = $pdo->prepare("INSERT INTO perguntas (formulario_id, texto, ordem) VALUES (?, ?, ?)");
+        $ordem = 1;
+        foreach ($perguntasValidas as $texto) {
+            $stmtP->execute([$formularioId, $texto, $ordem]);
+            $ordem++;
         }
-        break;
+
+        $pdo->commit();
+        echo json_encode(['sucesso' => true, 'formulario_id' => $formularioId]);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        http_response_code(500);
+        echo json_encode(['erro' => 'Não foi possível criar o formulário']);
+    }
+    break;
 
     case 'alterar_status_formulario':
         exigirGestor();
