@@ -28,6 +28,8 @@ async function mostrarPesquisa() {
     var area = document.getElementById("perguntas");
     area.innerHTML = "<p>Carregando pesquisa...</p>";
     document.getElementById("botaoEnviar").style.display = "";
+    document.getElementById("numeroPergunta").innerText = "1 de 1";
+    document.getElementById("barraProgresso").style.width = "10%";
 
     try {
         var resposta = await fetch("api.php?action=formulario_ativo");
@@ -60,6 +62,11 @@ function mostrarGestor() {
 
 // ===================== Questionário =====================
 
+function corPreenchimento(valor) {
+    var pct = (valor / 10) * 100;
+    return "background: linear-gradient(to right, #075fd3 0%, #075fd3 " + pct + "%, #e7eaf0 " + pct + "%, #e7eaf0 100%);";
+}
+
 function criarPerguntas() {
     var area = document.getElementById("perguntas");
 
@@ -78,9 +85,8 @@ function criarPerguntas() {
             '<div class="pergunta-card">' +
                 '<div class="pergunta-titulo">' +
                     '<span>' + (i + 1) + '. ' + escaparHtml(pergunta.texto) + '</span>' +
-                    '<span class="rosto">😐</span>' +
                 '</div>' +
-                '<input class="range" type="range" min="0" max="10" value="' + notaInicial + '" oninput="mudarNota(' + pergunta.id + ', this.value)">' +
+                '<input class="range" type="range" min="0" max="10" value="' + notaInicial + '" style="' + corPreenchimento(notaInicial) + '" oninput="mudarNota(' + pergunta.id + ', this.value, this)">' +
                 '<div class="numeros"><span>0<br><small>Insatisfeito</small></span><span>1</span><span>2</span><span>3</span><span>4</span><span>5<br><small>Neutro</small></span><span>6</span><span>7</span><span>8</span><span>9</span><span>10<br><small>Muito satisfeito</small></span></div>' +
                 '<div class="nota" id="nota' + pergunta.id + '">' + notaInicial + '</div>' +
                 '<div class="satisfacao" id="textoNota' + pergunta.id + '">' + textoNota(notaInicial) + '</div>' +
@@ -90,10 +96,11 @@ function criarPerguntas() {
     atualizarProgresso();
 }
 
-function mudarNota(perguntaId, valor) {
+function mudarNota(perguntaId, valor, elemento) {
     notas[perguntaId] = Number(valor);
     document.getElementById("nota" + perguntaId).innerText = valor;
     document.getElementById("textoNota" + perguntaId).innerText = textoNota(Number(valor));
+    if (elemento) elemento.style.cssText = corPreenchimento(Number(valor));
     atualizarProgresso();
 }
 
@@ -360,6 +367,11 @@ function renderizarEvolucao(evolucao) {
 
 // ===================== Formulários (gestão) =====================
 
+function paraDatetimeMysql(valor) {
+    if (!valor) return null;
+    return valor.replace("T", " ") + ":00";
+}
+
 async function carregarListaFormularios() {
     var container = document.getElementById("listaFormularios");
     try {
@@ -404,12 +416,18 @@ function renderizarListaFormularios(lista) {
         var detalhe = f.total_respostas + " resposta" + (f.total_respostas === 1 ? "" : "s");
         if (f.respondentes_esperados) detalhe += " de " + f.respondentes_esperados + " esperadas";
 
+        var periodo = "";
+        if (f.data_abertura || f.data_fechamento) {
+            periodo = " · " + (f.data_abertura ? formatarData(f.data_abertura) : "sem início definido") +
+                      " até " + (f.data_fechamento ? formatarData(f.data_fechamento) : "sem fim definido");
+        }
+
         return (
             '<div class="item-formulario">' +
                 "<div>" +
                     "<b>" + escaparHtml(f.titulo) + "</b>" +
                     '<span class="' + statusInfo[0] + '">' + statusInfo[1] + "</span>" +
-                    "<br><small>" + detalhe + "</small>" +
+                    "<br><small>" + detalhe + periodo + "</small>" +
                 "</div>" +
                 '<div class="acoes-formulario">' + acoes + "</div>" +
             "</div>"
@@ -417,10 +435,6 @@ function renderizarListaFormularios(lista) {
     }).join("");
 }
 
-function paraDatetimeMysql(valor) {
-    if (!valor) return null;
-    return valor.replace("T", " ") + ":00";
-}
 async function criarFormulario() {
     var titulo = document.getElementById("novoFormTitulo").value.trim();
     var esperados = document.getElementById("novoFormEsperados").value;
@@ -444,8 +458,8 @@ async function criarFormulario() {
                 titulo: titulo,
                 respondentes_esperados: esperados ? Number(esperados) : null,
                 perguntas: perguntasTexto,
-                data_inicio: paraDatetimeMysql(document.getElementById("novoFormInicio").value),
-                data_termino: paraDatetimeMysql(document.getElementById("novoFormFim").value)   
+                data_abertura: paraDatetimeMysql(document.getElementById("novoFormInicio").value),
+                data_fechamento: paraDatetimeMysql(document.getElementById("novoFormFim").value)
             })
         });
 
@@ -455,9 +469,9 @@ async function criarFormulario() {
             erroEl.innerText = "";
             document.getElementById("novoFormTitulo").value = "";
             document.getElementById("novoFormEsperados").value = "";
+            document.getElementById("novoFormPerguntas").value = "";
             document.getElementById("novoFormInicio").value = "";
             document.getElementById("novoFormFim").value = "";
-            document.getElementById("novoFormPerguntas").value = "";
             carregarListaFormularios();
         } else {
             erroEl.innerText = dados.erro || "Não foi possível criar o formulário.";

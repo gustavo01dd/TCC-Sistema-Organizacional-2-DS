@@ -9,10 +9,10 @@ services:
       MYSQL_USER: clima_user
       MYSQL_PASSWORD: clima_pass
     volumes:
-      - ./docker/mariadb_data:/var/lib/mysql
+      - mariadb_data:/var/lib/mysql
       - ./database/schema.sql:/docker-entrypoint-initdb.d/1-schema.sql
     ports:
-      - "3307:3306"
+      - "3306:3306"
 
   php:
     build:
@@ -41,3 +41,6 @@ services:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - php
+
+volumes:
+  mariadb_data:

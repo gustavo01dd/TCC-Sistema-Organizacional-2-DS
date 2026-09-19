@@ -214,14 +214,45 @@ h1 {
     font-weight: bold;
 }
 
-.rosto {
-    font-size: 35px;
+/* Slider de nota (0-10) */
+.range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    border-radius: 10px;
+    background: #e7eaf0;
+    margin: 30px 0 10px;
+    cursor: pointer;
 }
 
-.range {
-    width: 100%;
-    accent-color: #d39b00;
-    margin: 30px 0 10px;
+.range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #075fd3;
+    border: 3px solid white;
+    box-shadow: 0 2px 6px rgba(7, 95, 211, 0.4);
+    cursor: pointer;
+    margin-top: -8px;
+}
+
+.range::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #075fd3;
+    border: none;
+    box-shadow: 0 2px 6px rgba(7, 95, 211, 0.4);
+    cursor: pointer;
+}
+
+.range::-moz-range-track {
+    height: 8px;
+    border-radius: 10px;
+    background: transparent;
 }
 
 .numeros {
@@ -588,6 +619,7 @@ textarea {
 
 .painel input[type="text"],
 .painel input[type="number"],
+.painel input[type="datetime-local"],
 .painel textarea {
     width: 100%;
     padding: 12px;
@@ -718,15 +750,4 @@ textarea {
         flex-direction: column;
         align-items: flex-start;
     }
-}
-
-.painel input[type="text"],
-.painel input[type="number"],
-.painel input[type="datetime-local"],
-.painel textarea {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #d7dce4;
-    border-radius: 8px;
-    font-size: 15px;
 }
