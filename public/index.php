@@ -8,6 +8,7 @@
 </head>
 <body>
 
+<!-- ===================== TELA INICIAL ===================== -->
 <div id="telaPesquisa" class="pagina">
     <header class="topo">
         <span>Pesquisa de Clima Organizacional</span>
@@ -19,11 +20,13 @@
         <h1>Pesquisa de Clima Organizacional</h1>
         <p class="subtitulo">Sua opinião é fundamental para melhorarmos juntos</p>
 
+        <div id="avisoPesquisa" class="aviso-pesquisa escondido"></div>
+
         <div class="info">
             <div class="info-icone azul">♙</div>
             <div>
-                <h3>100% Anônima</h3>
-                <p>Esta pesquisa é totalmente anônima. Não coletamos nenhuma informação pessoal que possa identificá-lo.</p>
+                <h3>Respostas Anônimas</h3>
+                <p>Você entra com email e senha só para o sistema saber que você já participou e evitar respostas duplicadas. Suas respostas nunca ficam ligadas ao seu nome: ninguém, nem a gestão, consegue ver o que você respondeu.</p>
             </div>
         </div>
 
@@ -31,7 +34,7 @@
             <div class="info-icone cinza">◉</div>
             <div>
                 <h3>Confidencial</h3>
-                <p>Suas respostas são confidenciais e serão analisadas apenas de forma agregada pela equipe gestora.</p>
+                <p>Os resultados são analisados apenas de forma agregada e só aparecem para a gestão depois que um número mínimo de pessoas responde.</p>
             </div>
         </div>
 
@@ -39,27 +42,55 @@
             <div class="info-icone verde">✓</div>
             <div>
                 <h3>Rápida e Simples</h3>
-                <p>Poucas perguntas. Leva só alguns minutos.</p>
+                <p>Poucas perguntas, leva só alguns minutos.</p>
             </div>
         </div>
 
         <div class="como">
             <h2>Como funciona?</h2>
             <ol>
-                <li>Você avaliará os aspectos do ambiente de trabalho</li>
-                <li>Arraste o controle para escolher sua nota de 0 a 10</li>
-                <li>Opcionalmente, deixe um comentário ao final</li>
+                <li>Entre com o email e a senha cadastrados pela gestão</li>
+                <li>Arraste o controle para escolher sua nota de 0 a 10 em cada pergunta</li>
+                <li>Se quiser, deixe um comentário ou sugestão no final e envie</li>
             </ol>
         </div>
 
-        <button class="botao azul-btn" onclick="mostrarPesquisa()">Iniciar Pesquisa</button>
+        <button class="botao azul-btn" onclick="mostrarLogin()">Iniciar Pesquisa</button>
 
         <p class="rodape-frase">Suas respostas nos ajudam a criar um <b>ambiente de trabalho melhor para todos</b></p>
 
-        <button class="link-gestor" onclick="mostrarGestor()">Acesso para gestores →</button>
+        <button class="link-gestor" onclick="mostrarLogin()">Acesso para gestores →</button>
     </main>
 </div>
 
+<!-- ===================== LOGIN (funcionários e gestores) ===================== -->
+<div id="telaLogin" class="pagina login-gestor escondido">
+    <div class="login-card">
+        <div class="login-icone">▣</div>
+
+        <h1>Entrar</h1>
+        <p class="subtitulo-login">Funcionários vão para a pesquisa e gestores para o painel de gestão</p>
+
+        <label for="emailLogin">Email</label>
+        <input id="emailLogin" type="email" placeholder="seu@email.com" autocomplete="username">
+
+        <label for="senhaLogin">Senha</label>
+        <input id="senhaLogin" type="password" placeholder="••••••" autocomplete="current-password" onkeydown="if (event.key === 'Enter') entrar()">
+
+        <button id="botaoEntrar" class="botao azul-btn" onclick="entrar()">Entrar</button>
+        <p id="erroLogin" class="erro"></p>
+
+        <div class="credenciais">
+            <b>Credenciais de teste</b> (senha <b>123456</b> para todos)
+            <br>Gestor: gestor@escola.com
+            <br>Funcionários: funcionario1@escola.com, funcionario2@escola.com, funcionario3@escola.com
+        </div>
+
+        <button class="voltar-login" onclick="mostrarInicio()">← Voltar para o início</button>
+    </div>
+</div>
+
+<!-- ===================== QUESTIONÁRIO (funcionário) ===================== -->
 <div id="telaQuestionario" class="pagina escondido">
     <header class="topo">
         <span>Pesquisa de Clima Organizacional</span>
@@ -67,182 +98,289 @@
     </header>
 
     <main class="conteudo">
-        <button class="voltar" onclick="mostrarInicio()">‹ Voltar</button>
+        <button class="voltar" onclick="sair()">‹ Sair</button>
 
+        <div id="saudacaoFuncionario" class="saudacao"></div>
         <div id="formularioTitulo" class="formulario-titulo-ativo"></div>
 
         <div class="progresso-topo">
-            <div>
-                <span>Progresso da pesquisa</span>
-                <b id="numeroPergunta">1 de 1</b>
-            </div>
-            <div class="barra">
-                <div id="barraProgresso"></div>
-            </div>
+            <span>Progresso</span>
+            <span id="numeroPergunta"></span>
+        </div>
+        <div class="barra">
+            <div id="barraProgresso"></div>
         </div>
 
-        <div id="perguntas"><p>Carregando pesquisa...</p></div>
+        <div id="perguntas"></div>
 
-        <div class="comentario-box">
-            <label>Comentário final (opcional)</label>
-            <textarea id="comentario" placeholder="Gostaria de deixar algum comentário?"></textarea>
+        <div id="blocoEnvio" class="escondido">
+            <div class="comentario-box">
+                <label for="comentario">Comentário ou sugestão final (opcional)</label>
+                <textarea id="comentario" maxlength="2000" placeholder="Escreva aqui sua sugestão, elogio ou crítica..."></textarea>
+            </div>
+
+            <button id="botaoEnviar" class="botao azul-btn" onclick="enviarPesquisa()">Enviar respostas</button>
+            <p class="aviso-envio">Depois de enviadas, as respostas não podem ser alteradas.</p>
         </div>
-
-        <button id="botaoEnviar" class="botao azul-btn" onclick="enviarPesquisa()">Enviar pesquisa</button>
     </main>
 </div>
 
-<div id="telaGestor" class="pagina login-gestor escondido">
-    <div class="login-card">
-        <div class="icone-login">♢</div>
-        <h1>Acesso Gestor</h1>
-        <p>Dashboard de Clima Organizacional</p>
-
-        <label>Email</label>
-        <input id="emailGestor" type="email" placeholder="seu.email@escola.com">
-
-        <label>Senha</label>
-        <input id="senhaGestor" type="password" placeholder="••••••••">
-
-        <button class="botao azul-btn" onclick="entrarGestor()">Entrar</button>
-
-        <div class="credenciais">
-            <b>Credenciais de teste:</b><br>
-            Email: gestor@escola.com<br>
-            Senha: 123456
-        </div>
-
-        <button class="voltar-login" onclick="mostrarInicio()">← Voltar para a pesquisa</button>
-        <p id="erroLogin" class="erro"></p>
-    </div>
-</div>
-
+<!-- ===================== PAINEL DO GESTOR ===================== -->
 <div id="telaDashboard" class="dashboard escondido">
     <aside class="menu">
         <div class="logo">Pesquisa de Clima<br><span>Organizacional</span></div>
         <div class="gestor-label">Painel do Gestor</div>
+        <div id="nomeGestor" class="nome-gestor"></div>
 
         <button class="menu-item ativo" onclick="mostrarView('dashboard', this)">▣ &nbsp; Dashboard</button>
+        <button class="menu-item" onclick="mostrarView('resultados', this)">▥ &nbsp; Resultados</button>
         <button class="menu-item" onclick="mostrarView('formularios', this)">▤ &nbsp; Formulários</button>
         <button class="menu-item" onclick="mostrarView('comentarios', this)">▱ &nbsp; Comentários</button>
-        <button class="menu-item" onclick="mostrarAviso(this)">▥ &nbsp; Relatórios</button>
+        <button class="menu-item" onclick="mostrarView('funcionarios', this)">◈ &nbsp; Funcionários</button>
+        <button class="menu-item" onclick="mostrarView('relatorios', this)">▦ &nbsp; Relatórios</button>
+
+        <button class="menu-sair" onclick="sair()">⎋ &nbsp; Sair</button>
     </aside>
 
-    <section class="dashboard-conteudo">
+    <main class="dashboard-conteudo">
 
-        <!-- ===================== VIEW: DASHBOARD ===================== -->
-        <div id="viewDashboard">
+        <!-- ========== VIEW: DASHBOARD ========== -->
+        <section id="viewDashboard">
             <div class="dashboard-topo">
-                <h1 id="dashboardTitulo">Dashboard de Clima Organizacional</h1>
+                <div>
+                    <h1 id="dashboardTitulo">Dashboard</h1>
+                    <p>Visão geral dos resultados da pesquisa de clima organizacional</p>
+                </div>
             </div>
+
+            <div id="avisoAnonimatoDashboard" class="aviso-anonimato escondido"></div>
 
             <div class="cards">
                 <div class="card card-azul">
-                    <small>Média Geral</small>
+                    <span>Média Geral</span>
                     <strong id="statMediaGeral">—</strong>
-                    <span>de 10 pontos</span>
+                    <p>de 10.0 pontos</p>
                 </div>
-
                 <div class="card">
-                    <small>Total de Respostas</small>
+                    <span>Total de Respostas</span>
                     <strong id="statTotalRespostas">—</strong>
-                    <span id="statRespostasDesde">&nbsp;</span>
+                    <p id="statRespostasDesde">&nbsp;</p>
                 </div>
-
                 <div class="card">
-                    <small>Taxa de Participação</small>
+                    <span>Taxa de Participação</span>
                     <strong id="statTaxaParticipacao">—</strong>
-                    <span id="statTaxaDetalhe">&nbsp;</span>
+                    <p id="statTaxaDetalhe">&nbsp;</p>
                 </div>
-
                 <div class="card">
-                    <small>Última Atualização</small>
+                    <span>Última Atualização</span>
                     <strong class="data" id="statUltimaAtualizacao">—</strong>
-                    <span id="statUltimaAtualizacaoData">&nbsp;</span>
+                    <p id="statUltimaAtualizacaoData">&nbsp;</p>
                 </div>
             </div>
 
             <div class="duas-colunas">
                 <div class="painel">
-                    <h3 class="titulo-vermelho">⚠ Pontos Críticos</h3>
-                    <div id="pontosCriticos"><p class="aviso-vazio">Ainda sem dados suficientes</p></div>
+                    <h2 class="titulo-critico">⚠ Pontos Críticos</h2>
+                    <div id="pontosCriticos"></div>
                 </div>
-
                 <div class="painel">
-                    <h3 class="titulo-verde">♧ Pontos Fortes</h3>
-                    <div id="pontosFortes"><p class="aviso-vazio">Ainda sem dados suficientes</p></div>
+                    <h2 class="titulo-forte">↗ Pontos Fortes</h2>
+                    <div id="pontosFortes"></div>
                 </div>
             </div>
 
             <div class="graficos">
                 <div class="painel">
-                    <h3>Evolução Temporal</h3>
-                    <div class="grafico-linha">
-                        <div class="linha-svg" id="graficoEvolucao"></div>
-                        <div class="meses" id="legendaEvolucao"></div>
-                        <p class="tendencia" id="textoTendencia"></p>
-                    </div>
+                    <h2>Evolução Temporal</h2>
+                    <p>Respostas recebidas por dia</p>
+                    <div id="graficoEvolucao" class="grafico-linha"></div>
+                    <div id="legendaEvolucao" class="meses"></div>
+                    <p id="textoTendencia" class="tendencia"></p>
                 </div>
-
                 <div class="painel">
-                    <h3>Distribuição de Respostas</h3>
+                    <h2>Distribuição de Satisfação</h2>
+                    <p>Classificação geral das respostas</p>
                     <div class="pizza-area">
-                        <div class="pizza" id="graficoPizza"></div>
+                        <div id="graficoPizza" class="pizza"></div>
                         <div class="legenda">
-                            <span><i class="vermelho"></i>0-3 (Insatisfeito)</span>
-                            <span><i class="amarelo"></i>4-6 (Neutro)</span>
-                            <span><i class="verde"></i>7-10 (Satisfeito)</span>
+                            <p><span class="verde-bola"></span> Satisfeito (7-10)</p>
+                            <p><span class="amarelo-bola"></span> Neutro (4-6)</p>
+                            <p><span class="vermelho-bola"></span> Insatisfeito (0-3)</p>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- ===================== VIEW: FORMULÁRIOS ===================== -->
-        <div id="viewFormularios" class="escondido">
+        <!-- ========== VIEW: RESULTADOS ========== -->
+        <section id="viewResultados" class="escondido">
             <div class="dashboard-topo">
-                <h1>Formulários</h1>
+                <div>
+                    <h1>Resultados</h1>
+                    <p>Análise detalhada de cada pergunta da pesquisa</p>
+                    <p id="resultadosFormulario" class="subtitulo-resultados"></p>
+                </div>
+                <select id="filtroPeriodo" class="filtro-periodo" onchange="carregarResultados()">
+                    <option value="7">Últimos 7 dias</option>
+                    <option value="30">Últimos 30 dias</option>
+                    <option value="completo" selected>Período completo</option>
+                </select>
             </div>
 
-            <div class="painel" style="margin-bottom:15px;">
-                <h3>Criar novo formulário</h3>
-                <label>Título</label>
-                <input id="novoFormTitulo" type="text" placeholder="Ex: Pesquisa de Clima — 2º Semestre 2026">
+            <div id="listaResultados"></div>
+        </section>
 
-                <label>Nº de funcionários esperados (opcional)</label>
-                <input id="novoFormEsperados" type="number" min="1" placeholder="Ex: 151">
+        <!-- ========== VIEW: FORMULÁRIOS ========== -->
+        <section id="viewFormularios" class="escondido">
+            <div class="dashboard-topo">
+                <div>
+                    <h1>Formulários</h1>
+                    <p>Crie novos formulários e escolha qual fica ativo para os funcionários</p>
+                </div>
+            </div>
 
-                <label>Data de início (opcional)</label>
+            <div class="painel">
+                <h2>Novo formulário</h2>
+
+                <label for="novoFormTitulo">Título</label>
+                <input id="novoFormTitulo" type="text" maxlength="150" placeholder="Ex.: Pesquisa de Clima 2º Semestre">
+
+                <label for="novoFormEsperados">Nº de respondentes esperados (opcional)</label>
+                <input id="novoFormEsperados" type="number" min="1" placeholder="Se ficar vazio, usa o total de funcionários cadastrados">
+
+                <label for="novoFormInicio">Data e hora de início (opcional)</label>
                 <input id="novoFormInicio" type="datetime-local">
-                <label>Data de término (opcional)</label>
-                <input id="novoFormFim" type="datetime-local">
 
-                <label>Perguntas (uma por linha)</label>
-                <textarea id="novoFormPerguntas" placeholder="Digite uma pergunta por linha..."></textarea>
+                <label for="novoFormFim">Data e hora de término (opcional)</label>
+                <input id="novoFormFim" type="datetime-local">
+                <p class="dica-campo">Sem data de término, a pesquisa fica aberta por 7 dias depois de ativada.</p>
+
+                <label for="novoFormPerguntas">Perguntas (uma por linha)</label>
+                <textarea id="novoFormPerguntas" placeholder="Como você avalia o ambiente de trabalho?&#10;Você se sente valorizado pela gestão?"></textarea>
 
                 <button class="botao azul-btn" onclick="criarFormulario()">Criar formulário</button>
                 <p id="erroNovoForm" class="erro"></p>
             </div>
 
             <div class="painel">
-                <h3>Formulários existentes</h3>
-                <div id="listaFormularios"><p class="aviso-vazio">Carregando...</p></div>
+                <h2>Formulários existentes</h2>
+                <div id="listaFormularios"></div>
             </div>
-        </div>
+        </section>
 
-        <!-- ===================== VIEW: COMENTÁRIOS ===================== -->
-        <div id="viewComentarios" class="escondido">
+        <!-- ========== VIEW: COMENTÁRIOS ========== -->
+        <section id="viewComentarios" class="escondido">
             <div class="dashboard-topo">
-                <h1>Comentários</h1>
+                <div>
+                    <h1>Comentários</h1>
+                    <p>Sugestões e comentários enviados de forma anônima</p>
+                    <p id="comentariosFormulario" class="subtitulo-resultados"></p>
+                </div>
             </div>
 
             <div class="painel">
-                <div id="listaComentarios"><p class="aviso-vazio">Carregando...</p></div>
+                <div id="listaComentarios"></div>
             </div>
-        </div>
+        </section>
 
-        <button class="sair-dashboard" onclick="sairDashboard()">Sair</button>
-    </section>
+        <!-- ========== VIEW: FUNCIONÁRIOS ========== -->
+        <section id="viewFuncionarios" class="escondido">
+            <div class="dashboard-topo">
+                <div>
+                    <h1>Funcionários</h1>
+                    <p>Cadastre os logins de quem responde a pesquisa (e de outros gestores)</p>
+                </div>
+            </div>
+
+            <div id="formFuncionario" class="painel">
+                <h2 id="tituloFormFunc">Novo cadastro</h2>
+
+                <label for="novoFuncNome">Nome</label>
+                <input id="novoFuncNome" type="text" maxlength="100" placeholder="Nome completo">
+
+                <label for="novoFuncEmail">Email (usado no login)</label>
+                <input id="novoFuncEmail" type="email" maxlength="100" placeholder="nome@escola.com">
+
+                <label for="novoFuncSenha">Senha</label>
+                <input id="novoFuncSenha" type="password" placeholder="Mínimo de 6 caracteres" autocomplete="new-password">
+
+                <label for="novoFuncCargo">Cargo (opcional)</label>
+                <input id="novoFuncCargo" type="text" maxlength="50" placeholder="Ex.: Professor">
+
+                <label for="novoFuncAdmissao">Data de admissão (opcional)</label>
+                <input id="novoFuncAdmissao" type="date">
+
+                <label for="novoFuncPerfil">Perfil</label>
+                <select id="novoFuncPerfil">
+                    <option value="funcionario">Funcionário (responde a pesquisa)</option>
+                    <option value="gestor">Gestor (acessa este painel)</option>
+                </select>
+
+                <div class="botoes-form">
+                    <button id="botaoSalvarFunc" class="botao azul-btn" onclick="salvarFuncionario()">Cadastrar</button>
+                    <button id="botaoCancelarEdicaoFunc" class="botao-pequeno escondido" onclick="cancelarEdicaoFuncionario()">Cancelar edição</button>
+                </div>
+                <p id="erroNovoFunc" class="erro"></p>
+            </div>
+
+            <div class="painel">
+                <h2>Cadastrados</h2>
+                <p id="infoPesquisaAtual" class="info-lista"></p>
+                <div id="listaFuncionarios"></div>
+            </div>
+        </section>
+
+        <!-- ========== VIEW: RELATÓRIOS ========== -->
+        <section id="viewRelatorios" class="escondido">
+            <div class="dashboard-topo">
+                <div>
+                    <h1>Relatórios e Exportações</h1>
+                    <p>Gere relatórios e exporte dados para análise externa</p>
+                </div>
+            </div>
+
+            <div class="grade-exportacao">
+                <div class="card-exportacao">
+                    <div class="icone-exportacao pdf">▤</div>
+                    <h2>Relatório Completo (PDF)</h2>
+                    <p>Resumo da pesquisa, estatísticas de cada pergunta e comentários, pronto para imprimir ou salvar em PDF.</p>
+                    <button class="botao-exportar pdf" onclick="exportarPdf()">⤓ Exportar PDF</button>
+                </div>
+
+                <div class="card-exportacao">
+                    <div class="icone-exportacao excel">▦</div>
+                    <h2>Dados Brutos (Excel)</h2>
+                    <p>Planilha com todas as respostas anônimas, para análise personalizada no Excel.</p>
+                    <button class="botao-exportar excel" onclick="exportarCsv()">⤓ Exportar Excel</button>
+                </div>
+
+                <div class="card-exportacao">
+                    <div class="icone-exportacao txt">▱</div>
+                    <h2>Comentários (TXT)</h2>
+                    <p>Arquivo de texto com todos os comentários e sugestões recebidos.</p>
+                    <button class="botao-exportar txt" onclick="exportarComentariosArquivo()">⤓ Exportar TXT</button>
+                </div>
+
+                <div class="card-exportacao">
+                    <div class="icone-exportacao png">▥</div>
+                    <h2>Gráficos (PNG)</h2>
+                    <p>Imagem com os gráficos de evolução e de distribuição de satisfação.</p>
+                    <button class="botao-exportar png" onclick="exportarGraficoPng()">⤓ Exportar PNG</button>
+                </div>
+            </div>
+
+            <div class="dica-analise">
+                <b>💡 Dica de análise</b>
+                Para uma análise mais aprofundada, exporte os dados brutos para o Excel e use tabelas dinâmicas para cruzar as notas das perguntas e identificar padrões ao longo do período.
+            </div>
+
+            <div class="painel">
+                <h2>Registro de acessos dos gestores</h2>
+                <div id="listaLogs"></div>
+            </div>
+        </section>
+
+    </main>
 </div>
 
 <script src="script.js"></script>

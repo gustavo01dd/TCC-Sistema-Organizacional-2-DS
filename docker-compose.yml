@@ -1,3 +1,10 @@
+# ============================================================
+# Pesquisa de Clima Organizacional - ambiente Docker
+#   Subir:     docker compose up -d --build
+#   Preparar:  docker compose exec php php /var/www/database/seed.php
+#   Acessar:   http://localhost:8080
+# ============================================================
+
 services:
   mariadb:
     image: mariadb:10.11
@@ -8,6 +15,7 @@ services:
       MYSQL_DATABASE: clima_tcc
       MYSQL_USER: clima_user
       MYSQL_PASSWORD: clima_pass
+      TZ: America/Sao_Paulo
     volumes:
       - mariadb_data:/var/lib/mysql
       - ./database/schema.sql:/docker-entrypoint-initdb.d/1-schema.sql
@@ -15,13 +23,9 @@ services:
       - "3306:3306"
 
   php:
-    build:
-      context: ./docker/php
+    build: ./docker/php
     container_name: clima_php
     restart: unless-stopped
-    volumes:
-      - ./public:/var/www/public
-      - ./database:/var/www/database
     depends_on:
       - mariadb
     environment:
@@ -29,18 +33,46 @@ services:
       DB_NAME: clima_tcc
       DB_USER: clima_user
       DB_PASS: clima_pass
+      DB_TIMEZONE: "-03:00"
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./public:/var/www/public
+      - ./database:/var/www/database
 
   nginx:
     image: nginx:alpine
     container_name: clima_nginx
     restart: unless-stopped
+    depends_on:
+      - php
     ports:
       - "8080:80"
     volumes:
       - ./public:/var/www/public
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+
+  # RNF10: backup diário automático do banco na pasta ./backups (guarda 7 dias)
+  backup:
+    image: mariadb:10.11
+    container_name: clima_backup
+    restart: unless-stopped
     depends_on:
-      - php
+      - mariadb
+    environment:
+      MYSQL_PWD: clima_pass
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./backups:/backups
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until mariadb-admin ping -h mariadb -u clima_user --silent; do sleep 5; done
+        while true; do
+          mariadb-dump -h mariadb -u clima_user --single-transaction clima_tcc > /backups/clima_tcc_$$(date +%Y-%m-%d).sql
+          find /backups -name 'clima_tcc_*.sql' -mtime +7 -delete
+          sleep 86400
+        done
 
 volumes:
   mariadb_data:
