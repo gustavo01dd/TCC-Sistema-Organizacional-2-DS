@@ -369,8 +369,8 @@
                 <div class="card-exportacao">
                     <div class="icone-exportacao excel">▦</div>
                     <h2>Dados Brutos (Excel)</h2>
-                    <p>Planilha com todas as respostas anônimas, para análise personalizada no Excel.</p>
-                    <button class="botao-exportar excel" onclick="exportarCsv()">⤓ Exportar Excel</button>
+                    <p>Planilha do Excel já formatada, com filtros e todas as respostas anônimas, para análise personalizada.</p>
+                    <button class="botao-exportar excel" onclick="exportarExcel()">⤓ Exportar Excel</button>
                 </div>
 
                 <div class="card-exportacao">

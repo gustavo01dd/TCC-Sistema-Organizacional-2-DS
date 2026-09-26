@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/funcoes.php';
+require_once __DIR__ . '/excel.php';
 
 iniciarSessao();
 
@@ -617,7 +618,8 @@ try {
         // GESTOR: exportações (Relatórios) e logs
         // =======================================================
 
-        case 'exportar_csv':
+        // Planilha do Excel (.xlsx) já formatada, com todas as respostas anônimas
+        case 'exportar_excel':
             exigirGestor($pdo);
             $formularioId = resolverFormularioId($pdo, $_GET['formulario_id'] ?? null);
             if (!$formularioId) {
@@ -627,6 +629,13 @@ try {
             $total = contarRespostas($pdo, $formularioId);
             if (dadosOcultos($total)) {
                 responderJson(['erro' => "Exportação indisponível: este formulário tem $total resposta(s). Para proteger o anonimato, é preciso ter pelo menos " . MINIMO_RESPOSTAS_ANONIMATO . '.'], 403);
+            }
+
+            $stmt = $pdo->prepare("SELECT titulo, data_abertura, data_fechamento FROM formularios WHERE id = ?");
+            $stmt->execute([$formularioId]);
+            $formulario = $stmt->fetch();
+            if (!$formulario) {
+                responderJson(['erro' => 'Formulário não encontrado'], 404);
             }
 
             $stmt = $pdo->prepare("SELECT id, texto FROM perguntas WHERE formulario_id = ? ORDER BY ordem, id");
@@ -639,35 +648,32 @@ try {
             $respostas = $stmt->fetchAll();
 
             $stmtItens = $pdo->prepare("SELECT pergunta_id, nota FROM resposta_itens WHERE resposta_id = ?");
-
-            header('Content-Type: text/csv; charset=utf-8');
-            header('Content-Disposition: attachment; filename="respostas_pesquisa_' . $formularioId . '.csv"');
-
-            $saida = fopen('php://output', 'w');
-            fwrite($saida, "\xEF\xBB\xBF"); // acentos certos no Excel
-
-            $cabecalho = ['data_envio'];
-            foreach ($perguntas as $pergunta) {
-                $cabecalho[] = $pergunta['texto'];
-            }
-            $cabecalho[] = 'comentario';
-            fputcsv($saida, $cabecalho, ';', '"', '');
-
+            $linhas = [];
             foreach ($respostas as $resposta) {
                 $stmtItens->execute([$resposta['id']]);
                 $notas = [];
                 foreach ($stmtItens->fetchAll() as $item) {
-                    $notas[$item['pergunta_id']] = $item['nota'];
+                    $notas[(int)$item['pergunta_id']] = (int)$item['nota'];
                 }
-                $linha = [date('d/m/Y', strtotime($resposta['data_envio']))];
-                foreach ($perguntas as $pergunta) {
-                    $linha[] = $notas[$pergunta['id']] ?? '';
-                }
-                $linha[] = $resposta['comentario'] ?? '';
-                fputcsv($saida, $linha, ';', '"', '');
+                $linhas[] = [
+                    'data' => $resposta['data_envio'],
+                    'notas' => array_map(fn($p) => $notas[(int)$p['id']] ?? null, $perguntas),
+                    'comentario' => (string)($resposta['comentario'] ?? ''),
+                ];
             }
 
-            fclose($saida);
+            $subtitulo = 'Gerado em ' . date('d/m/Y') . ' às ' . date('H:i') . '  ·  ' . count($linhas) . ' resposta(s), todas anônimas';
+            if ($formulario['data_abertura']) {
+                $subtitulo .= '  ·  Período: ' . date('d/m/Y', strtotime($formulario['data_abertura'])) . ' a '
+                    . ($formulario['data_fechamento'] ? date('d/m/Y', strtotime($formulario['data_fechamento'])) : 'em aberto');
+            }
+
+            $arquivo = gerarPlanilhaRespostas($formulario['titulo'], $subtitulo, array_column($perguntas, 'texto'), $linhas);
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="respostas_pesquisa_' . $formularioId . '.xlsx"');
+            header('Content-Length: ' . strlen($arquivo));
+            echo $arquivo;
             exit;
 
         case 'exportar_comentarios':

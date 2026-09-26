@@ -31,7 +31,8 @@ Tudo roda em containers Docker, com o Nginx como servidor web.
 - **Dockerfile**: montagem da imagem do PHP.
 - **Shell script (sh)**: rotina do backup diário, dentro do `docker-compose.yml`.
 - **Markdown**: este `README.md`.
-- **CSV, TXT e PNG**: exportações do sistema (dados brutos para o Excel, comentários e gráficos).
+- **XLSX (Office Open XML)**: planilha do Excel com as respostas, gerada direto em PHP e já formatada (um .xlsx é um arquivo ZIP com XMLs dentro).
+- **TXT e PNG**: exportações dos comentários e dos gráficos.
 
 ### Banco de dados
 
@@ -56,6 +57,7 @@ Tudo roda em containers Docker, com o Nginx como servidor web.
 - **SVG**: gráfico de evolução temporal.
 - **Canvas API**: exportação dos gráficos em PNG.
 - **Impressão do navegador** (`window.print`): relatório em PDF.
+- **ZIP e XML gerados em PHP** (`gzdeflate`, `crc32`, `pack`): montagem do arquivo .xlsx sem bibliotecas externas.
 - **localStorage**: guarda no navegador a escolha de tema (claro ou escuro).
 - **prefers-color-scheme**: na primeira visita, o site segue o tema do sistema (Windows ou celular).
 
@@ -90,6 +92,7 @@ o projeto mais complexo sem necessidade.
 │   ├── api.php                   rotas da API (api.php?action=...)
 │   ├── config.php                conexão com o banco, fuso horário e sessão
 │   ├── funcoes.php               regras de negócio compartilhadas
+│   ├── excel.php                 gera a planilha .xlsx formatada
 │   └── relatorio_impressao.php   relatório para imprimir / salvar em PDF
 └── backups/                      criada sozinha pelo backup diário
 ```
@@ -240,7 +243,7 @@ Se mudar um valor, ajuste também os textos que citam o número em `index.php` e
 | funcionarios, criar_funcionario, editar_funcionario, alterar_status_funcionario, excluir_funcionario | gestor | Cadastro (RF01) |
 | formularios, criar_formulario, alterar_status_formulario | gestor | Formulários (RF02) |
 | dashboard, resultados, comentarios | gestor | Indicadores e análises |
-| exportar_csv, exportar_comentarios, logs_acesso | gestor | Exportações e logs |
+| exportar_excel, exportar_comentarios, logs_acesso | gestor | Exportações (Excel e TXT) e logs |
 
 ## Antes de usar de verdade
 

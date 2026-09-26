@@ -1083,9 +1083,9 @@ function exportarPdf() {
     window.open("relatorio_impressao.php?formulario_id=" + formularioSelecionadoId, "_blank");
 }
 
-function exportarCsv() {
+function exportarExcel() {
     if (!exigirFormularioSelecionado()) return;
-    baixarArquivo("exportar_csv", "respostas_pesquisa_" + formularioSelecionadoId + ".csv");
+    baixarArquivo("exportar_excel", "respostas_pesquisa_" + formularioSelecionadoId + ".xlsx");
 }
 
 function exportarComentariosArquivo() {
