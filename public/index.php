@@ -3,10 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b56c9">
     <title>Pesquisa de Clima Organizacional</title>
+    <script>
+        // aplica o tema antes de desenhar a página (evita "piscar" claro no modo escuro)
+        (function () {
+            try {
+                var tema = localStorage.getItem("tema");
+                if (!tema) {
+                    tema = window.matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro";
+                }
+                document.documentElement.setAttribute("data-tema", tema);
+            } catch (e) {
+                document.documentElement.setAttribute("data-tema", "claro");
+            }
+        })();
+    </script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<!-- botão de tema (claro / escuro) das telas públicas; no painel ele fica no menu -->
+<button id="botaoTema" class="botao-tema" onclick="alternarTema()" title="Mudar para o modo escuro" aria-label="Mudar para o modo escuro">☾</button>
 
 <!-- ===================== TELA INICIAL ===================== -->
 <div id="telaPesquisa" class="pagina">
@@ -139,6 +157,7 @@
         <button class="menu-item" onclick="mostrarView('funcionarios', this)">◈ &nbsp; Funcionários</button>
         <button class="menu-item" onclick="mostrarView('relatorios', this)">▦ &nbsp; Relatórios</button>
 
+        <button id="botaoTemaMenu" class="menu-tema" onclick="alternarTema()">☾ &nbsp; Modo escuro</button>
         <button class="menu-sair" onclick="sair()">⎋ &nbsp; Sair</button>
     </aside>
 

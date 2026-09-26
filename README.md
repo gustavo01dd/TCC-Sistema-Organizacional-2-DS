@@ -1,17 +1,77 @@
-# Pesquisa de Clima Organizacional (TCC)
+# Climatize: Pesquisa de Clima Organizacional (TCC)
 
 Sistema web para aplicar pesquisas de clima organizacional com **respostas anônimas**.
 Os funcionários entram com email e senha só para o sistema controlar quem já participou;
 o conteúdo das respostas nunca fica ligado à pessoa. Os gestores acompanham os resultados
 em um painel com dashboard, resultados por pergunta, comentários, cadastro de funcionários
-e relatórios.
+e relatórios. O visual usa fundos em azul e tem **modo escuro**, ligado pelo botão ☾ no topo
+das telas ou pelo item "Modo escuro" no menu do painel.
 
 ## Tecnologias
 
-- Front-end: HTML, CSS e JavaScript puro
-- Back-end: PHP 8.2 (PDO)
-- Banco de dados: MariaDB 10.11
-- Ambiente: Docker (nginx + php-fpm + mariadb + serviço de backup)
+**Arquitetura:** aplicação web cliente-servidor. O front-end (HTML, CSS e JavaScript) se comunica
+por requisições HTTP, com dados em JSON, com uma API em PHP que grava em um banco MariaDB.
+Tudo roda em containers Docker, com o Nginx como servidor web.
+
+### Linguagens de programação
+
+- **PHP 8.2**: back-end completo. API (`api.php`), regras de negócio (`funcoes.php`), login, sessões e relatório em PDF.
+- **JavaScript (ES6+, puro, sem frameworks)**: troca de telas, chamadas à API com `fetch` e `async/await`, gráficos e exportações.
+- **SQL**: criação do banco (`schema.sql`) e todas as consultas (médias, contagens, filtros por período, controle de quem respondeu).
+
+### Linguagens de marcação e estilo
+
+- **HTML5**: estrutura de todas as telas (`index.php` e `relatorio_impressao.php`).
+- **CSS3**: visual, responsividade e tema claro/escuro, com variáveis CSS (custom properties), Flexbox, Grid, media queries e `conic-gradient` no gráfico de rosca.
+
+### Formatos e arquivos de configuração
+
+- **JSON**: formato dos dados trocados entre o JavaScript e a API.
+- **YAML**: `docker-compose.yml`.
+- **Dockerfile**: montagem da imagem do PHP.
+- **Shell script (sh)**: rotina do backup diário, dentro do `docker-compose.yml`.
+- **Markdown**: este `README.md`.
+- **CSV, TXT e PNG**: exportações do sistema (dados brutos para o Excel, comentários e gráficos).
+
+### Banco de dados
+
+- **MariaDB 10.11**: banco de dados relacional compatível com MySQL, com motor **InnoDB**
+  (chaves estrangeiras e transações) e conjunto de caracteres **utf8mb4** (acentos e emojis).
+
+### Servidor e infraestrutura
+
+- **Docker** e **Docker Compose**: sobem o sistema inteiro com um comando, em 4 containers (nginx, php, mariadb e backup).
+- **Docker Desktop no Windows (com WSL2)**: ambiente de desenvolvimento.
+- **Nginx** (imagem `nginx:alpine`): servidor web que entrega as páginas e repassa o PHP.
+- **PHP-FPM**: executa o código PHP.
+- **Volume Docker `mariadb_data`**: armazenamento permanente do banco.
+- **mariadb-dump**: backup diário automático (RNF10).
+
+### Recursos nativos usados (sem bibliotecas externas)
+
+- **PDO** (PHP): acesso ao banco com *prepared statements*, que protegem contra SQL injection.
+- **password_hash com bcrypt** (PHP): senhas guardadas só como hash.
+- **Sessões PHP** com cookie HttpOnly e SameSite: controle de login.
+- **Fetch API** (JavaScript): comunicação com o back-end.
+- **SVG**: gráfico de evolução temporal.
+- **Canvas API**: exportação dos gráficos em PNG.
+- **Impressão do navegador** (`window.print`): relatório em PDF.
+- **localStorage**: guarda no navegador a escolha de tema (claro ou escuro).
+- **prefers-color-scheme**: na primeira visita, o site segue o tema do sistema (Windows ou celular).
+
+### Ferramentas de desenvolvimento e documentação
+
+- **Visual Studio Code**: editor de código.
+- **Figma**: protótipo das telas.
+- **MySQL Workbench**: diagrama físico do banco de dados.
+- **Diagrama conceitual do MER**: _(complete com o nome da ferramenta usada)_.
+- **Navegador e celular**: testes das telas e da versão responsiva.
+- **Assistentes de IA** (Claude e o assistente do VS Code): apoio no desenvolvimento e na correção de erros.
+
+### Frameworks
+
+Nenhum. O React foi avaliado e descartado: não resolveria a responsividade no celular e deixaria
+o projeto mais complexo sem necessidade.
 
 ## Estrutura
 
@@ -72,6 +132,31 @@ docker compose exec php php /var/www/database/seed.php
   de **21 dias** (RN03). Para testar com os mesmos usuários, recrie o banco (`docker compose down -v`).
 - As médias só aparecem a partir de **3 respostas** (RN07). Use os 3 funcionários de teste.
 
+## Dados e backup (RNF10)
+
+Os dados do banco ficam no volume Docker **`mariadb_data`**, que o próprio Docker gerencia:
+ele não aparece como pasta dentro do projeto (a pasta antiga `docker/mariadb_data` não é mais usada).
+Para ver o volume, abra a aba **Volumes** do Docker Desktop ou rode `docker volume ls`.
+
+| Comando ou situação | O que acontece com os dados |
+|---|---|
+| `docker compose down` / `docker compose up -d` | Continuam salvos |
+| Reiniciar o computador ou fechar o Docker Desktop | Continuam salvos |
+| `docker compose down -v` | **Apaga tudo** (o `-v` remove o volume) |
+
+O serviço `backup` salva uma cópia por dia em `backups/clima_tcc_AAAA-MM-DD.sql` e apaga
+as cópias com mais de 7 dias. Para restaurar uma cópia:
+
+```bash
+docker compose exec -T mariadb mariadb -u clima_user -pclima_pass clima_tcc < backups/clima_tcc_AAAA-MM-DD.sql
+```
+
+Para consultar os dados direto no banco:
+
+```bash
+docker compose exec mariadb mariadb -u clima_user -pclima_pass clima_tcc -e "SELECT nome, email FROM funcionarios;"
+```
+
 ## Como o anonimato funciona
 
 | Tabela | O que guarda | Liga à pessoa? |
@@ -111,7 +196,7 @@ Cuidados extras (RN07), porque o gestor vê quem já respondeu:
 | RF11 | Filtro por setor ou equipe | ❌ | Não implementado: conflita com RN05/RN07 (ver abaixo) |
 | RF12 | Logs de acesso dos gestores | ✅ | Entradas, saídas e tentativas recusadas (tela Relatórios) |
 | RNF01 | Responsivo | ✅ | Layout para celular, tablet e computador |
-| RNF02 | Interface simples | ✅ | |
+| RNF02 | Interface simples | ✅ | Visual limpo em azul, com modo escuro |
 | RNF03 | Usuários simultâneos | — | Depende do servidor; o envio é protegido contra concorrência |
 | RNF04 | Relatórios só para gestor autenticado | ✅ | Ver RN06 |
 | RNF05 | Criptografar dados sensíveis | ⚠️ Parcial | Senhas com hash bcrypt; criptografia do disco é configuração do servidor |
@@ -156,15 +241,6 @@ Se mudar um valor, ajuste também os textos que citam o número em `index.php` e
 | formularios, criar_formulario, alterar_status_formulario | gestor | Formulários (RF02) |
 | dashboard, resultados, comentarios | gestor | Indicadores e análises |
 | exportar_csv, exportar_comentarios, logs_acesso | gestor | Exportações e logs |
-
-## Backup (RNF10)
-
-O serviço `backup` salva um arquivo por dia em `backups/clima_tcc_AAAA-MM-DD.sql` e apaga os
-com mais de 7 dias. Para restaurar um backup:
-
-```bash
-docker compose exec -T mariadb mariadb -u clima_user -pclima_pass clima_tcc < backups/clima_tcc_AAAA-MM-DD.sql
-```
 
 ## Antes de usar de verdade
 

@@ -18,7 +18,54 @@ var funcionarioEditandoId = null;   // null = cadastrando; número = editando es
 var TELAS = ["telaPesquisa", "telaLogin", "telaQuestionario", "telaDashboard"];
 var VIEWS = ["dashboard", "resultados", "formularios", "comentarios", "funcionarios", "relatorios"];
 
-document.addEventListener("DOMContentLoaded", carregarAvisoPesquisa);
+document.addEventListener("DOMContentLoaded", iniciar);
+
+function iniciar() {
+    aplicarTema(temaAtual());
+    carregarAvisoPesquisa();
+
+    // se a pessoa nunca escolheu um tema, acompanha o tema do sistema
+    try {
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function (evento) {
+            if (!localStorage.getItem("tema")) {
+                aplicarTema(evento.matches ? "escuro" : "claro");
+            }
+        });
+    } catch (e) {
+        // navegador antigo: fica com o tema atual
+    }
+}
+
+
+// ===================== Tema claro / escuro =====================
+
+function temaAtual() {
+    return document.documentElement.getAttribute("data-tema") === "escuro" ? "escuro" : "claro";
+}
+
+function aplicarTema(tema) {
+    var escuro = tema === "escuro";
+    document.documentElement.setAttribute("data-tema", escuro ? "escuro" : "claro");
+
+    var dica = escuro ? "Mudar para o modo claro" : "Mudar para o modo escuro";
+    var botao = document.getElementById("botaoTema");
+    botao.innerText = escuro ? "☀" : "☾";
+    botao.title = dica;
+    botao.setAttribute("aria-label", dica);
+
+    document.getElementById("botaoTemaMenu").innerText = escuro ? "☀ \u00A0 Modo claro" : "☾ \u00A0 Modo escuro";
+    document.querySelector('meta[name="theme-color"]').setAttribute("content", escuro ? "#0a1733" : "#0b56c9");
+}
+
+function alternarTema() {
+    var novoTema = temaAtual() === "escuro" ? "claro" : "escuro";
+    aplicarTema(novoTema);
+    try {
+        localStorage.setItem("tema", novoTema);
+    } catch (e) {
+        // sem permissão para salvar: o tema vale só até fechar a página
+    }
+}
 
 
 // ===================== Comunicação com a API =====================
@@ -89,6 +136,9 @@ function mostrarTela(id) {
         document.getElementById(tela).classList.add("escondido");
     });
     document.getElementById(id).classList.remove("escondido");
+
+    // no painel do gestor o botão de tema fica dentro do menu
+    document.getElementById("botaoTema").classList.toggle("escondido", id === "telaDashboard");
     window.scrollTo(0, 0);
 }
 
@@ -233,8 +283,8 @@ function criarPerguntas() {
 
 function corPreenchimento(valor) {
     var porcentagem = (Number(valor) / 10) * 100;
-    return "background: linear-gradient(to right, #075fd3 0%, #075fd3 " + porcentagem +
-        "%, #e5e7eb " + porcentagem + "%, #e5e7eb 100%);";
+    return "background: linear-gradient(to right, var(--primaria) 0%, var(--primaria) " + porcentagem +
+        "%, var(--trilho) " + porcentagem + "%, var(--trilho) 100%);";
 }
 
 function mudarNota(perguntaId, valor, elemento) {
@@ -467,7 +517,7 @@ function renderizarDistribuicao(dist) {
     var pizza = document.getElementById("graficoPizza");
 
     if (total === 0) {
-        pizza.style.background = "#e5e7eb";
+        pizza.style.background = "var(--trilho)";
         return;
     }
 
