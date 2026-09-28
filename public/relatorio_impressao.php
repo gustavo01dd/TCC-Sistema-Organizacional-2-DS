@@ -60,17 +60,33 @@ if ($status === false) {
     exit('Formulário não encontrado.');
 }
 
-$stmt = $pdo->prepare("SELECT data_geracao, dados_consolidados FROM relatorios WHERE formulario_id = ?");
-$stmt->execute([$formularioId]);
-$relatorio = $stmt->fetch();
+// o relatório consolidado fica guardado criptografado (RNF05)
+$relatorio = lerRelatorio($pdo, $formularioId);
 
 $consolidado = false;
 if ($status === 'encerrado' && $relatorio) {
-    $dados = json_decode($relatorio['dados_consolidados'], true);
-    $consolidado = is_array($dados);
+    $dados = $relatorio['dados'];
+    $consolidado = true;
 }
 if (!$consolidado) {
     $dados = montarDadosConsolidados($pdo, $formularioId);
+}
+$dados += ['categorias' => []];
+
+// resultado de uma pergunta em texto, conforme o tipo
+function resultadoPergunta($p) {
+    $tipo = $p['tipo'] ?? 'nota';
+    if ($tipo === 'nota') {
+        return 'Média ' . numero($p['media']) . ' · mediana ' . numero($p['mediana']) . ' · desvio ' . numero($p['desvio_padrao']);
+    }
+    if (empty($p['opcoes'])) {
+        return '—';
+    }
+    $partes = [];
+    foreach ($p['opcoes'] as $o) {
+        $partes[] = e($o['texto']) . ': ' . (int)$o['percentual'] . '% (' . (int)$o['total'] . ')';
+    }
+    return implode(' · ', $partes);
 }
 
 $formulario = $dados['formulario'];
@@ -95,6 +111,7 @@ $formulario = $dados['formulario'];
     .caixa { border: 1px solid #e4e8ee; border-radius: 10px; padding: 15px; }
     .caixa span { color: #64748b; font-size: 14px; }
     .caixa b { display: block; font-size: 28px; margin-top: 6px; }
+    .categoria { display: inline-block; font-size: 11px; color: #075fd3; background: #e9f0ff; border-radius: 10px; padding: 1px 8px; margin-top: 3px; }
     .tabela-container { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th, td { border-bottom: 1px solid #e4e8ee; padding: 10px 8px; text-align: left; }
@@ -143,6 +160,22 @@ $formulario = $dados['formulario'];
     <?php elseif ((int)$dados['total_respostas'] === 0): ?>
         <div class="aviso">Ainda não há respostas para esta pesquisa.</div>
     <?php else: ?>
+        <?php if (count($dados['categorias']) > 0): ?>
+            <h2>Média por categoria</h2>
+            <div class="tabela-container">
+                <table>
+                    <tr><th>Categoria</th><th class="num">Perguntas</th><th class="num">Média (0 a 10)</th></tr>
+                    <?php foreach ($dados['categorias'] as $c): ?>
+                        <tr>
+                            <td><?= e($c['categoria']) ?></td>
+                            <td class="num"><?= (int)$c['perguntas'] ?></td>
+                            <td class="num"><?= numero($c['media']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </table>
+            </div>
+        <?php endif; ?>
+
         <h2>Resultados por pergunta</h2>
         <div class="tabela-container">
             <table>
@@ -150,18 +183,14 @@ $formulario = $dados['formulario'];
                     <th>#</th>
                     <th>Pergunta</th>
                     <th class="num">Respostas</th>
-                    <th class="num">Média</th>
-                    <th class="num">Mediana</th>
-                    <th class="num">Desvio padrão</th>
+                    <th>Resultado</th>
                 </tr>
                 <?php foreach ($dados['por_pergunta'] as $i => $p): ?>
                     <tr>
                         <td><?= $i + 1 ?></td>
-                        <td><?= e($p['texto']) ?></td>
+                        <td><?= e($p['texto']) ?><?php if (!empty($p['categoria'])): ?><br><span class="categoria"><?= e($p['categoria']) ?></span><?php endif; ?></td>
                         <td class="num"><?= (int)$p['total'] ?></td>
-                        <td class="num"><?= numero($p['media']) ?></td>
-                        <td class="num"><?= numero($p['mediana']) ?></td>
-                        <td class="num"><?= numero($p['desvio_padrao']) ?></td>
+                        <td><?= resultadoPergunta($p) ?></td>
                     </tr>
                 <?php endforeach; ?>
             </table>

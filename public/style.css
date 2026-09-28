@@ -299,7 +299,9 @@ h1 {
 .verde { color: var(--sucesso); }
 .cinza { color: var(--texto-suave); }
 
-.info h3 {
+.info h3,
+.info-titulo {
+    font-size: 18px;
     margin: 2px 0 6px;
 }
 
@@ -1465,6 +1467,724 @@ select:focus {
     box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22);
 }
 
+/* ===================== Acessibilidade ===================== */
+
+/* texto só para leitores de tela */
+.sr-only {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* contorno visível ao navegar pelo teclado */
+:focus-visible {
+    outline: 3px solid #f59e0b;
+    outline-offset: 2px;
+}
+
+[tabindex="-1"]:focus {
+    outline: none;
+}
+
+/* ===================== Links do rodapé e política ===================== */
+
+.rodape-links {
+    margin-top: 18px;
+    font-size: 14px;
+}
+
+.rodape-links a,
+.pesquisa-inicio .rodape-links a {
+    color: var(--texto-sobre-azul);
+    opacity: 0.9;
+}
+
+.login-card .rodape-links {
+    text-align: center;
+}
+
+.login-card .rodape-links a,
+.termo-texto a {
+    color: var(--primaria);
+    font-weight: 600;
+}
+
+a.voltar {
+    display: inline-block;
+    text-decoration: none;
+}
+
+.politica {
+    background: var(--superficie);
+    color: var(--texto);
+    border: 1px solid var(--borda-card);
+    border-radius: 18px;
+    padding: 32px 36px;
+    box-shadow: var(--sombra);
+    line-height: 1.6;
+}
+
+.politica h1 {
+    font-size: 32px;
+    margin-top: 0;
+}
+
+.politica h2 {
+    font-size: 19px;
+    margin: 26px 0 8px;
+    color: var(--primaria);
+}
+
+.politica li {
+    margin-bottom: 6px;
+}
+
+.politica-aviso {
+    background: var(--alerta-fundo);
+    color: var(--alerta);
+    border: 1px solid var(--alerta-borda);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-weight: 600;
+}
+
+.politica-meta {
+    color: var(--texto-suave);
+    font-size: 14px;
+}
+
+/* ===================== Termo de consentimento ===================== */
+
+.termo-card {
+    max-width: 600px;
+}
+
+.termo-texto {
+    background: var(--superficie-2);
+    border: 1px solid var(--borda);
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-top: 18px;
+    max-height: 320px;
+    overflow-y: auto;
+    line-height: 1.55;
+    font-size: 15px;
+}
+
+.termo-texto ul {
+    margin: 0 0 12px;
+    padding-left: 20px;
+}
+
+.termo-texto li {
+    margin-bottom: 8px;
+}
+
+.login-card label.checkbox-termo {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-weight: 600;
+    margin: 20px 0 0;
+    cursor: pointer;
+    line-height: 1.4;
+}
+
+.login-card .checkbox-termo input {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: var(--primaria);
+    cursor: pointer;
+}
+
+/* ===================== Agradecimento ===================== */
+
+.obrigado-card {
+    text-align: center;
+}
+
+.obrigado-icone {
+    width: 84px;
+    height: 84px;
+    margin: 0 auto 8px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #10b981, #34d399);
+    color: #ffffff;
+    font-size: 44px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 12px 28px rgba(16, 185, 129, 0.35);
+}
+
+.obrigado-info {
+    background: var(--superficie-2);
+    border-radius: 14px;
+    padding: 6px 18px;
+    margin-top: 18px;
+    text-align: left;
+    line-height: 1.55;
+    color: var(--texto-suave);
+}
+
+/* ===================== Questionário: rascunho e tipos de pergunta ===================== */
+
+.aviso-rascunho {
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: var(--texto-sobre-azul);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 14px;
+    margin: -8px 0 20px;
+}
+
+.categoria-chip,
+.tipo-chip {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 2px 9px;
+    border-radius: 20px;
+    background: var(--primaria-clara);
+    color: var(--primaria);
+    vertical-align: middle;
+}
+
+.tipo-chip {
+    background: var(--superficie-2);
+    color: var(--texto-suave);
+}
+
+.pergunta-numero .categoria-chip {
+    margin-left: 6px;
+}
+
+.grupo-opcoes {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+
+.grupo-opcoes legend {
+    padding: 0;
+    margin-bottom: 18px;
+}
+
+.opcoes-resposta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
+}
+
+.opcoes-resposta.sim-nao {
+    grid-template-columns: 1fr 1fr;
+    max-width: 420px;
+}
+
+.opcao-resposta {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 54px;
+    padding: 12px 14px;
+    border: 2px solid var(--campo-borda);
+    border-radius: 14px;
+    background: var(--campo-fundo);
+    color: var(--texto);
+    font-weight: 700;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+/* só em aparelhos com mouse: no celular o "hover" ficaria preso depois do toque */
+@media (hover: hover) {
+    .opcao-resposta:hover {
+        border-color: var(--primaria);
+        transform: translateY(-1px);
+    }
+}
+
+/* o botão de rádio continua existindo (teclado e leitores de tela), só fica invisível */
+.opcao-resposta input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+}
+
+/* contorno só quando a alternativa é focada pelo teclado (Tab / setas) */
+.opcao-resposta:has(input:focus-visible) {
+    outline: 3px solid #f59e0b;
+    outline-offset: 2px;
+}
+
+@supports not selector(:has(*)) {
+    .opcao-resposta:focus-within {
+        outline: 3px solid #f59e0b;
+        outline-offset: 2px;
+    }
+}
+
+.opcao-resposta.selecionada {
+    border-color: var(--primaria);
+    background: var(--gradiente-primario);
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(11, 94, 215, 0.3);
+}
+
+.pergunta-pendente {
+    box-shadow: 0 0 0 3px var(--perigo), var(--sombra);
+}
+
+/* além da cor, um texto avisa que falta responder (acessibilidade) */
+.pergunta-pendente .pergunta-numero::after {
+    content: "Falta responder";
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--perigo);
+    color: #ffffff;
+    font-size: 11px;
+    letter-spacing: 0;
+}
+
+/* ===================== Painel: categorias ===================== */
+
+.painel-categorias {
+    margin-top: 16px;
+}
+
+.lista-categorias,
+.lista-opcoes {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.linha-categoria,
+.linha-opcao {
+    display: grid;
+    grid-template-columns: minmax(140px, 1.3fr) 2fr 70px;
+    align-items: center;
+    gap: 14px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--borda);
+}
+
+.linha-categoria:last-child,
+.linha-opcao:last-child {
+    border-bottom: 0;
+}
+
+.nome-categoria small {
+    color: var(--texto-suave);
+    font-weight: 400;
+}
+
+.barra-categoria,
+.barra-opcao {
+    height: 12px;
+    background: var(--trilho);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.barra-categoria-preenchida,
+.barra-opcao-preenchida {
+    display: block;
+    height: 100%;
+    border-radius: 10px;
+    background: var(--gradiente-primario);
+    transition: width 0.4s ease;
+}
+
+.barra-categoria-preenchida.media-boa { background: linear-gradient(90deg, #10b981, #34d399); }
+.barra-categoria-preenchida.media-neutra { background: linear-gradient(90deg, #f4b400, #fcd34d); }
+.barra-categoria-preenchida.media-ruim { background: linear-gradient(90deg, #dc2626, #f87171); }
+
+.barra-opcao-preenchida {
+    background: linear-gradient(90deg, #93c5fd, #60a5fa);
+}
+
+.barra-opcao-preenchida.destaque {
+    background: var(--gradiente-primario);
+}
+
+.valor-categoria,
+.valor-opcao {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.valor-opcao small {
+    color: var(--texto-suave);
+    font-weight: 400;
+}
+
+.resultado-etiquetas {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.filtros-resultados {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* ===================== Comparar pesquisas ===================== */
+
+.comparar-seletores {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 16px;
+    align-items: end;
+}
+
+.painel .comparar-seletores label {
+    margin-top: 0;
+}
+
+.painel .comparar-seletores .botao {
+    margin-top: 0;
+}
+
+.grade-comparacao {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.card-comparacao {
+    background: var(--superficie);
+    border: 1px solid var(--borda);
+    border-radius: var(--raio);
+    padding: 22px;
+    box-shadow: var(--sombra-suave);
+}
+
+.card-comparacao h2 {
+    font-size: 18px;
+    margin: 6px 0 2px;
+}
+
+.card-comparacao > p {
+    color: var(--texto-suave);
+    margin: 0 0 14px;
+    font-size: 14px;
+}
+
+.rotulo-comparacao {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--primaria);
+}
+
+.numeros-comparacao {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.numeros-comparacao > div {
+    background: var(--superficie-2);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+}
+
+.numeros-comparacao span {
+    display: block;
+    color: var(--texto-suave);
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.numeros-comparacao b {
+    font-size: 22px;
+}
+
+.resumo-diferenca {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    font-size: 17px;
+}
+
+/* position: relative prende os textos .sr-only das células dentro da área que rola */
+.tabela-rolagem {
+    position: relative;
+    overflow-x: auto;
+}
+
+.tabela-comparacao {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.tabela-comparacao th,
+.tabela-comparacao td {
+    padding: 11px 10px;
+    border-bottom: 1px solid var(--borda);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.tabela-comparacao thead th {
+    color: var(--texto-suave);
+    font-size: 13px;
+    font-weight: 700;
+    border-bottom: 2px solid var(--borda);
+}
+
+.tabela-comparacao tbody th {
+    font-weight: 600;
+}
+
+.tabela-comparacao td {
+    white-space: nowrap;
+}
+
+.tabela-comparacao code {
+    font-size: 15px;
+    font-weight: 700;
+    background: var(--superficie-2);
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.delta {
+    font-weight: 700;
+    color: var(--texto-suave);
+    white-space: nowrap;
+}
+
+.delta-positivo { color: var(--sucesso); }
+.delta-negativo { color: var(--perigo); }
+
+/* ===================== Editor de formulários ===================== */
+
+.campos-lado {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+
+.subtitulo-editor {
+    margin: 24px 0 10px;
+    font-size: 17px;
+}
+
+.pergunta-editor {
+    border: 1px solid var(--borda);
+    border-left: 4px solid var(--primaria);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    background: var(--superficie-2);
+}
+
+.pergunta-editor-topo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pergunta-editor-topo input {
+    flex: 1;
+}
+
+.pergunta-editor-campos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.painel .pergunta-editor label {
+    font-size: 13px;
+    margin: 10px 0 5px;
+}
+
+.pergunta-editor textarea {
+    min-height: 90px !important;
+}
+
+.pergunta-editor-acoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.botao-icone {
+    width: 36px;
+    height: 34px;
+    border: 1px solid var(--primaria);
+    background: transparent;
+    color: var(--primaria);
+    border-radius: 9px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.botao-icone:hover:not(:disabled) {
+    background: var(--primaria);
+    color: #ffffff;
+}
+
+.botao-icone.botao-encerrar {
+    border-color: var(--perigo);
+    color: var(--perigo);
+}
+
+.botao-icone.botao-encerrar:hover:not(:disabled) {
+    background: var(--perigo);
+    color: #ffffff;
+}
+
+.botao-icone:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.linha-email {
+    display: block;
+    color: var(--primaria) !important;
+}
+
+/* ===================== Importação de funcionários ===================== */
+
+.importar-linha {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.painel input[type="file"] {
+    flex: 1;
+    min-width: 220px;
+    padding: 10px;
+    border: 1px dashed var(--campo-borda);
+    border-radius: 12px;
+    background: var(--campo-fundo);
+    color: var(--texto);
+    font-size: 14px;
+}
+
+.painel .botao.botao-medio {
+    margin-top: 0;
+    padding: 11px 20px;
+    font-size: 15px;
+}
+
+.resultado-importacao {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: var(--superficie-2);
+}
+
+.resultado-importacao p {
+    margin: 0 0 10px;
+}
+
+.lista-ignorados {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--texto-suave);
+    font-size: 14px;
+}
+
+/* ===================== Menos animação para quem prefere ===================== */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+@media (max-width: 900px) {
+    .comparar-seletores,
+    .grade-comparacao,
+    .campos-lado {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 650px) {
+    .pergunta-editor-campos {
+        grid-template-columns: 1fr;
+    }
+
+    /* os 3 números continuam lado a lado, só mais compactos */
+    .numeros-comparacao {
+        gap: 6px;
+    }
+
+    .numeros-comparacao > div {
+        padding: 10px 4px;
+    }
+
+    .numeros-comparacao span {
+        font-size: 11px;
+    }
+
+    .numeros-comparacao b {
+        font-size: 19px;
+    }
+
+    .linha-categoria,
+    .linha-opcao {
+        grid-template-columns: 1fr 64px;
+        gap: 6px 10px;
+    }
+
+    .barra-categoria,
+    .barra-opcao {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+
+    .politica {
+        padding: 22px 18px;
+    }
+
+    .opcoes-resposta.sim-nao {
+        max-width: none;
+    }
+}
+
 /* ===================== Responsivo (RNF01) ===================== */
 
 @media (max-width: 900px) {
@@ -1587,6 +2307,58 @@ select:focus {
 
     .stats-resultado b {
         font-size: 16px;
+    }
+
+    /* no celular, cada linha da comparação vira um bloco: a pergunta em cima e
+       os três valores lado a lado, com o nome da coluna acima de cada um */
+    .tabela-comparacao thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+    }
+
+    .tabela-comparacao tr {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 4px 8px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--borda);
+    }
+
+    .tabela-comparacao tbody th {
+        grid-column: 1 / -1;
+        padding: 0;
+        border: none;
+    }
+
+    .tabela-comparacao td {
+        padding: 0;
+        border: none;
+        font-size: 14px;
+        white-space: normal;
+    }
+
+    .tabela-comparacao .delta {
+        white-space: normal;
+    }
+
+    .tabela-comparacao td::before {
+        content: attr(data-rotulo);
+        display: block;
+        color: var(--texto-suave);
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    /* senhas geradas na importação: um campo embaixo do outro */
+    .tabela-senhas tr {
+        grid-template-columns: 1fr;
+    }
+
+    .tabela-senhas td {
+        overflow-wrap: anywhere;
     }
 }
 

@@ -3,6 +3,7 @@
 #   Subir:     docker compose up -d --build
 #   Preparar:  docker compose exec php php /var/www/database/seed.php
 #   Acessar:   http://localhost:8080
+#   E-mails:   http://localhost:8025  (caixa de entrada de teste do Mailpit)
 # ============================================================
 
 services:
@@ -28,6 +29,7 @@ services:
     restart: unless-stopped
     depends_on:
       - mariadb
+      - mailpit
     environment:
       DB_HOST: mariadb
       DB_NAME: clima_tcc
@@ -35,6 +37,12 @@ services:
       DB_PASS: clima_pass
       DB_TIMEZONE: "-03:00"
       TZ: America/Sao_Paulo
+      # RF08: e-mails de abertura, encerramento e lembrete.
+      # Em produção, troque pelo SMTP da escola (SMTP_USUARIO, SMTP_SENHA e SMTP_SEGURANCA: tls ou ssl).
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_REMETENTE: climatize@escola.local
+      APP_URL: http://localhost:8080
     volumes:
       - ./public:/var/www/public
       - ./database:/var/www/database
@@ -50,6 +58,15 @@ services:
     volumes:
       - ./public:/var/www/public
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+
+  # RF08: servidor de e-mail de teste. Nenhum e-mail sai de verdade: todos ficam
+  # na caixa de entrada de http://localhost:8025, ótimo para demonstrar.
+  mailpit:
+    image: axllent/mailpit
+    container_name: clima_mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
 
   # RNF10: backup diário automático do banco na pasta ./backups (guarda 7 dias)
   backup:

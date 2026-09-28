@@ -23,6 +23,9 @@
 </head>
 <body>
 
+<!-- avisos lidos pelos leitores de tela -->
+<div id="avisoLeitor" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
 <!-- botão de tema (claro / escuro) das telas públicas; no painel ele fica no menu -->
 <button id="botaoTema" class="botao-tema" onclick="alternarTema()" title="Mudar para o modo escuro" aria-label="Mudar para o modo escuro">☾</button>
 
@@ -30,36 +33,36 @@
 <div id="telaPesquisa" class="pagina">
     <header class="topo">
         <span>Pesquisa de Clima Organizacional</span>
-        <span>⌄</span>
+        <span aria-hidden="true">⌄</span>
     </header>
 
     <main class="conteudo pesquisa-inicio">
-        <div class="icone-principal">♢</div>
-        <h1>Pesquisa de Clima Organizacional</h1>
+        <div class="icone-principal" aria-hidden="true">♢</div>
+        <h1 tabindex="-1">Pesquisa de Clima Organizacional</h1>
         <p class="subtitulo">Sua opinião é fundamental para melhorarmos juntos</p>
 
-        <div id="avisoPesquisa" class="aviso-pesquisa escondido"></div>
+        <div id="avisoPesquisa" class="aviso-pesquisa escondido" role="status"></div>
 
         <div class="info">
-            <div class="info-icone azul">♙</div>
+            <div class="info-icone azul" aria-hidden="true">♙</div>
             <div>
-                <h3>Respostas Anônimas</h3>
+                <h2 class="info-titulo">Respostas Anônimas</h2>
                 <p>Você entra com email e senha só para o sistema saber que você já participou e evitar respostas duplicadas. Suas respostas nunca ficam ligadas ao seu nome: ninguém, nem a gestão, consegue ver o que você respondeu.</p>
             </div>
         </div>
 
         <div class="info">
-            <div class="info-icone cinza">◉</div>
+            <div class="info-icone cinza" aria-hidden="true">◉</div>
             <div>
-                <h3>Confidencial</h3>
-                <p>Os resultados são analisados apenas de forma agregada e só aparecem para a gestão depois que um número mínimo de pessoas responde.</p>
+                <h2 class="info-titulo">Confidencial</h2>
+                <p>Os resultados são analisados apenas de forma agregada e só aparecem para a gestão depois que um número mínimo de pessoas responde. Os comentários ficam guardados criptografados.</p>
             </div>
         </div>
 
         <div class="info">
-            <div class="info-icone verde">✓</div>
+            <div class="info-icone verde" aria-hidden="true">✓</div>
             <div>
-                <h3>Rápida e Simples</h3>
+                <h2 class="info-titulo">Rápida e Simples</h2>
                 <p>Poucas perguntas, leva só alguns minutos.</p>
             </div>
         </div>
@@ -68,7 +71,8 @@
             <h2>Como funciona?</h2>
             <ol>
                 <li>Entre com o email e a senha cadastrados pela gestão</li>
-                <li>Arraste o controle para escolher sua nota de 0 a 10 em cada pergunta</li>
+                <li>No primeiro acesso, leia e aceite o termo de consentimento</li>
+                <li>Responda as perguntas: notas de 0 a 10, sim ou não e alternativas</li>
                 <li>Se quiser, deixe um comentário ou sugestão no final e envie</li>
             </ol>
         </div>
@@ -78,15 +82,16 @@
         <p class="rodape-frase">Suas respostas nos ajudam a criar um <b>ambiente de trabalho melhor para todos</b></p>
 
         <button class="link-gestor" onclick="mostrarLogin()">Acesso para gestores →</button>
+        <p class="rodape-links"><a href="privacidade.php" target="_blank" rel="noopener">Política de privacidade</a></p>
     </main>
 </div>
 
 <!-- ===================== LOGIN (funcionários e gestores) ===================== -->
 <div id="telaLogin" class="pagina login-gestor escondido">
-    <div class="login-card">
-        <div class="login-icone">▣</div>
+    <main class="login-card">
+        <div class="login-icone" aria-hidden="true">▣</div>
 
-        <h1>Entrar</h1>
+        <h1 tabindex="-1">Entrar</h1>
         <p class="subtitulo-login">Funcionários vão para a pesquisa e gestores para o painel de gestão</p>
 
         <label for="emailLogin">Email</label>
@@ -96,7 +101,7 @@
         <input id="senhaLogin" type="password" placeholder="••••••" autocomplete="current-password" onkeydown="if (event.key === 'Enter') entrar()">
 
         <button id="botaoEntrar" class="botao azul-btn" onclick="entrar()">Entrar</button>
-        <p id="erroLogin" class="erro"></p>
+        <p id="erroLogin" class="erro" role="alert"></p>
 
         <div class="credenciais">
             <b>Credenciais de teste</b> (senha <b>123456</b> para todos)
@@ -105,36 +110,72 @@
         </div>
 
         <button class="voltar-login" onclick="mostrarInicio()">← Voltar para o início</button>
-    </div>
+        <p class="rodape-links"><a href="privacidade.php" target="_blank" rel="noopener">Política de privacidade</a></p>
+    </main>
+</div>
+
+<!-- ===================== TERMO DE CONSENTIMENTO (RNF09) ===================== -->
+<div id="telaTermo" class="pagina login-gestor escondido">
+    <main class="login-card termo-card">
+        <div class="login-icone" aria-hidden="true">✓</div>
+        <h1 tabindex="-1">Antes de começar</h1>
+        <p class="subtitulo-login">Para participar das pesquisas de clima, leia e aceite o termo de consentimento.</p>
+
+        <div class="termo-texto" tabindex="0" aria-label="Resumo do termo de consentimento">
+            <ul>
+                <li>Você entra com email e senha só para o sistema saber que você já participou de cada pesquisa.</li>
+                <li>Suas respostas e comentários são gravados <b>sem ligação com seu nome ou email</b>. Nem a gestão consegue ver o que você respondeu.</li>
+                <li>A gestão vê apenas <b>se</b> você já respondeu a pesquisa atual e os resultados gerais, que só aparecem a partir de 3 respostas.</li>
+                <li>Os comentários ficam guardados criptografados.</li>
+                <li>Você pode receber emails avisando sobre a abertura, o encerramento e lembretes das pesquisas.</li>
+                <li>Seus dados são tratados conforme a Lei Geral de Proteção de Dados (LGPD, Lei nº 13.709/2018).</li>
+            </ul>
+            <a href="privacidade.php" target="_blank" rel="noopener">Ler a política de privacidade completa</a>
+        </div>
+
+        <label class="checkbox-termo">
+            <input id="aceiteTermo" type="checkbox" onchange="document.getElementById('botaoAceitarTermo').disabled = !this.checked">
+            <span>Li e concordo com o termo de consentimento e com a política de privacidade.</span>
+        </label>
+
+        <button id="botaoAceitarTermo" class="botao azul-btn" onclick="aceitarTermo()" disabled>Concordo e continuar</button>
+        <p id="erroTermo" class="erro" role="alert"></p>
+        <button class="voltar-login" onclick="sair()">Não concordo, sair</button>
+    </main>
 </div>
 
 <!-- ===================== QUESTIONÁRIO (funcionário) ===================== -->
 <div id="telaQuestionario" class="pagina escondido">
     <header class="topo">
         <span>Pesquisa de Clima Organizacional</span>
-        <span>⌄</span>
+        <span aria-hidden="true">⌄</span>
     </header>
 
     <main class="conteudo">
         <button class="voltar" onclick="sair()">‹ Sair</button>
 
-        <div id="saudacaoFuncionario" class="saudacao"></div>
+        <h1 id="saudacaoFuncionario" class="saudacao" tabindex="-1"></h1>
         <div id="formularioTitulo" class="formulario-titulo-ativo"></div>
 
         <div class="progresso-topo">
-            <span>Progresso</span>
+            <span id="rotuloProgresso">Progresso</span>
             <span id="numeroPergunta"></span>
         </div>
-        <div class="barra">
+        <div class="barra" role="progressbar" aria-labelledby="rotuloProgresso" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="barraProgressoContainer">
             <div id="barraProgresso"></div>
         </div>
+
+        <p id="avisoRascunho" class="aviso-rascunho escondido">
+            Suas respostas ficam salvas neste navegador até o envio, caso a página seja fechada.
+            Ao clicar em Sair, o rascunho é apagado.
+        </p>
 
         <div id="perguntas"></div>
 
         <div id="blocoEnvio" class="escondido">
             <div class="comentario-box">
                 <label for="comentario">Comentário ou sugestão final (opcional)</label>
-                <textarea id="comentario" maxlength="2000" placeholder="Escreva aqui sua sugestão, elogio ou crítica..."></textarea>
+                <textarea id="comentario" maxlength="2000" placeholder="Escreva aqui sua sugestão, elogio ou crítica..." oninput="salvarRascunho()"></textarea>
             </div>
 
             <button id="botaoEnviar" class="botao azul-btn" onclick="enviarPesquisa()">Enviar respostas</button>
@@ -143,36 +184,51 @@
     </main>
 </div>
 
+<!-- ===================== AGRADECIMENTO ===================== -->
+<div id="telaObrigado" class="pagina login-gestor escondido">
+    <main class="login-card obrigado-card">
+        <div class="obrigado-icone" aria-hidden="true">✓</div>
+        <h1 tabindex="-1">Obrigado por participar!</h1>
+        <p id="textoObrigado" class="subtitulo-login"></p>
+        <div class="obrigado-info">
+            <p>Suas respostas foram gravadas de forma <b>anônima</b>: o sistema registrou apenas que você participou, nunca o que você respondeu.</p>
+            <p>Os resultados são analisados pela gestão de forma agregada e ajudam a construir um ambiente de trabalho melhor.</p>
+        </div>
+        <button class="botao azul-btn" onclick="mostrarInicio()">Voltar para o início</button>
+    </main>
+</div>
+
 <!-- ===================== PAINEL DO GESTOR ===================== -->
 <div id="telaDashboard" class="dashboard escondido">
-    <aside class="menu">
+    <nav class="menu" aria-label="Menu do painel">
         <div class="logo">Pesquisa de Clima<br><span>Organizacional</span></div>
         <div class="gestor-label">Painel do Gestor</div>
         <div id="nomeGestor" class="nome-gestor"></div>
 
-        <button class="menu-item ativo" onclick="mostrarView('dashboard', this)">▣ &nbsp; Dashboard</button>
-        <button class="menu-item" onclick="mostrarView('resultados', this)">▥ &nbsp; Resultados</button>
-        <button class="menu-item" onclick="mostrarView('formularios', this)">▤ &nbsp; Formulários</button>
-        <button class="menu-item" onclick="mostrarView('comentarios', this)">▱ &nbsp; Comentários</button>
-        <button class="menu-item" onclick="mostrarView('funcionarios', this)">◈ &nbsp; Funcionários</button>
-        <button class="menu-item" onclick="mostrarView('relatorios', this)">▦ &nbsp; Relatórios</button>
+        <button class="menu-item ativo" data-view="dashboard" onclick="mostrarView('dashboard', this)" aria-current="page"><span aria-hidden="true">▣ &nbsp;</span>Dashboard</button>
+        <button class="menu-item" data-view="resultados" onclick="mostrarView('resultados', this)"><span aria-hidden="true">▥ &nbsp;</span>Resultados</button>
+        <button class="menu-item" data-view="comparar" onclick="mostrarView('comparar', this)"><span aria-hidden="true">⇄ &nbsp;</span>Comparar</button>
+        <button class="menu-item" data-view="formularios" onclick="mostrarView('formularios', this)"><span aria-hidden="true">▤ &nbsp;</span>Formulários</button>
+        <button class="menu-item" data-view="comentarios" onclick="mostrarView('comentarios', this)"><span aria-hidden="true">▱ &nbsp;</span>Comentários</button>
+        <button class="menu-item" data-view="funcionarios" onclick="mostrarView('funcionarios', this)"><span aria-hidden="true">◈ &nbsp;</span>Funcionários</button>
+        <button class="menu-item" data-view="relatorios" onclick="mostrarView('relatorios', this)"><span aria-hidden="true">▦ &nbsp;</span>Relatórios</button>
 
         <button id="botaoTemaMenu" class="menu-tema" onclick="alternarTema()">☾ &nbsp; Modo escuro</button>
-        <button class="menu-sair" onclick="sair()">⎋ &nbsp; Sair</button>
-    </aside>
+        <button class="menu-sair" onclick="sair()"><span aria-hidden="true">⎋ &nbsp;</span>Sair</button>
+    </nav>
 
     <main class="dashboard-conteudo">
 
         <!-- ========== VIEW: DASHBOARD ========== -->
-        <section id="viewDashboard">
+        <section id="viewDashboard" aria-labelledby="dashboardTitulo">
             <div class="dashboard-topo">
                 <div>
-                    <h1 id="dashboardTitulo">Dashboard</h1>
+                    <h1 id="dashboardTitulo" tabindex="-1">Dashboard</h1>
                     <p>Visão geral dos resultados da pesquisa de clima organizacional</p>
                 </div>
             </div>
 
-            <div id="avisoAnonimatoDashboard" class="aviso-anonimato escondido"></div>
+            <div id="avisoAnonimatoDashboard" class="aviso-anonimato escondido" role="status"></div>
 
             <div class="cards">
                 <div class="card card-azul">
@@ -199,32 +255,38 @@
 
             <div class="duas-colunas">
                 <div class="painel">
-                    <h2 class="titulo-critico">⚠ Pontos Críticos</h2>
+                    <h2 class="titulo-critico"><span aria-hidden="true">⚠ </span>Pontos Críticos</h2>
                     <div id="pontosCriticos"></div>
                 </div>
                 <div class="painel">
-                    <h2 class="titulo-forte">↗ Pontos Fortes</h2>
+                    <h2 class="titulo-forte"><span aria-hidden="true">↗ </span>Pontos Fortes</h2>
                     <div id="pontosFortes"></div>
                 </div>
+            </div>
+
+            <div class="painel painel-categorias">
+                <h2>Média por Categoria</h2>
+                <p>Perguntas de nota agrupadas por tema (0 a 10)</p>
+                <div id="graficoCategorias"></div>
             </div>
 
             <div class="graficos">
                 <div class="painel">
                     <h2>Evolução Temporal</h2>
                     <p>Respostas recebidas por dia</p>
-                    <div id="graficoEvolucao" class="grafico-linha"></div>
-                    <div id="legendaEvolucao" class="meses"></div>
+                    <div id="graficoEvolucao" class="grafico-linha" role="img" aria-label="Gráfico de respostas recebidas por dia"></div>
+                    <div id="legendaEvolucao" class="meses" aria-hidden="true"></div>
                     <p id="textoTendencia" class="tendencia"></p>
                 </div>
                 <div class="painel">
                     <h2>Distribuição de Satisfação</h2>
                     <p>Classificação geral das respostas</p>
                     <div class="pizza-area">
-                        <div id="graficoPizza" class="pizza"></div>
+                        <div id="graficoPizza" class="pizza" role="img" aria-label="Distribuição de satisfação"></div>
                         <div class="legenda">
-                            <p><span class="verde-bola"></span> Satisfeito (7-10)</p>
-                            <p><span class="amarelo-bola"></span> Neutro (4-6)</p>
-                            <p><span class="vermelho-bola"></span> Insatisfeito (0-3)</p>
+                            <p><span class="verde-bola" aria-hidden="true"></span> Satisfeito (7-10)</p>
+                            <p><span class="amarelo-bola" aria-hidden="true"></span> Neutro (4-6)</p>
+                            <p><span class="vermelho-bola" aria-hidden="true"></span> Insatisfeito (0-3)</p>
                         </div>
                     </div>
                 </div>
@@ -232,66 +294,113 @@
         </section>
 
         <!-- ========== VIEW: RESULTADOS ========== -->
-        <section id="viewResultados" class="escondido">
+        <section id="viewResultados" class="escondido" aria-labelledby="tituloResultados">
             <div class="dashboard-topo">
                 <div>
-                    <h1>Resultados</h1>
+                    <h1 id="tituloResultados" tabindex="-1">Resultados</h1>
                     <p>Análise detalhada de cada pergunta da pesquisa</p>
                     <p id="resultadosFormulario" class="subtitulo-resultados"></p>
                 </div>
-                <select id="filtroPeriodo" class="filtro-periodo" onchange="carregarResultados()">
-                    <option value="7">Últimos 7 dias</option>
-                    <option value="30">Últimos 30 dias</option>
-                    <option value="completo" selected>Período completo</option>
-                </select>
+                <div class="filtros-resultados">
+                    <label class="sr-only" for="filtroCategoria">Categoria</label>
+                    <select id="filtroCategoria" class="filtro-periodo" onchange="renderizarResultadosFiltrados()">
+                        <option value="">Todas as categorias</option>
+                    </select>
+                    <label class="sr-only" for="filtroPeriodo">Período</label>
+                    <select id="filtroPeriodo" class="filtro-periodo" onchange="carregarResultados()">
+                        <option value="7">Últimos 7 dias</option>
+                        <option value="30">Últimos 30 dias</option>
+                        <option value="completo" selected>Período completo</option>
+                    </select>
+                </div>
             </div>
 
             <div id="listaResultados"></div>
         </section>
 
-        <!-- ========== VIEW: FORMULÁRIOS ========== -->
-        <section id="viewFormularios" class="escondido">
+        <!-- ========== VIEW: COMPARAR ========== -->
+        <section id="viewComparar" class="escondido" aria-labelledby="tituloComparar">
             <div class="dashboard-topo">
                 <div>
-                    <h1>Formulários</h1>
-                    <p>Crie novos formulários e escolha qual fica ativo para os funcionários</p>
+                    <h1 id="tituloComparar" tabindex="-1">Comparar pesquisas</h1>
+                    <p>Veja como as médias mudaram de um ciclo de pesquisa para outro</p>
                 </div>
             </div>
 
             <div class="painel">
-                <h2>Novo formulário</h2>
+                <div class="comparar-seletores">
+                    <div>
+                        <label for="compararA">Pesquisa principal</label>
+                        <select id="compararA"></select>
+                    </div>
+                    <div>
+                        <label for="compararB">Comparar com</label>
+                        <select id="compararB"></select>
+                    </div>
+                    <button class="botao azul-btn" onclick="carregarComparacao()">Comparar</button>
+                </div>
+                <p class="dica-campo">As perguntas são comparadas pelo texto; por isso, duplicar o formulário do ciclo anterior mantém a comparação completa.</p>
+                <p id="erroComparar" class="erro" role="alert"></p>
+            </div>
+
+            <div id="resultadoComparacao"></div>
+        </section>
+
+        <!-- ========== VIEW: FORMULÁRIOS ========== -->
+        <section id="viewFormularios" class="escondido" aria-labelledby="tituloFormularios">
+            <div class="dashboard-topo">
+                <div>
+                    <h1 id="tituloFormularios" tabindex="-1">Formulários</h1>
+                    <p>Crie novos formulários e escolha qual fica ativo para os funcionários</p>
+                </div>
+            </div>
+
+            <div id="painelEditorFormulario" class="painel">
+                <h2 id="tituloEditorFormulario">Novo formulário</h2>
 
                 <label for="novoFormTitulo">Título</label>
                 <input id="novoFormTitulo" type="text" maxlength="150" placeholder="Ex.: Pesquisa de Clima 2º Semestre">
 
-                <label for="novoFormEsperados">Nº de respondentes esperados (opcional)</label>
-                <input id="novoFormEsperados" type="number" min="1" placeholder="Se ficar vazio, usa o total de funcionários cadastrados">
-
-                <label for="novoFormInicio">Data e hora de início (opcional)</label>
-                <input id="novoFormInicio" type="datetime-local">
-
-                <label for="novoFormFim">Data e hora de término (opcional)</label>
-                <input id="novoFormFim" type="datetime-local">
+                <div class="campos-lado">
+                    <div>
+                        <label for="novoFormEsperados">Nº de respondentes esperados (opcional)</label>
+                        <input id="novoFormEsperados" type="number" min="1" placeholder="Vazio = total de funcionários">
+                    </div>
+                    <div>
+                        <label for="novoFormInicio">Início (opcional)</label>
+                        <input id="novoFormInicio" type="datetime-local">
+                    </div>
+                    <div>
+                        <label for="novoFormFim">Término (opcional)</label>
+                        <input id="novoFormFim" type="datetime-local">
+                    </div>
+                </div>
                 <p class="dica-campo">Sem data de término, a pesquisa fica aberta por 7 dias depois de ativada.</p>
 
-                <label for="novoFormPerguntas">Perguntas (uma por linha)</label>
-                <textarea id="novoFormPerguntas" placeholder="Como você avalia o ambiente de trabalho?&#10;Você se sente valorizado pela gestão?"></textarea>
+                <h3 class="subtitulo-editor">Perguntas</h3>
+                <div id="editorPerguntas"></div>
+                <datalist id="listaCategorias"></datalist>
+                <button class="botao-pequeno" onclick="adicionarPerguntaEditor()">+ Adicionar pergunta</button>
 
-                <button class="botao azul-btn" onclick="criarFormulario()">Criar formulário</button>
-                <p id="erroNovoForm" class="erro"></p>
+                <div class="botoes-form">
+                    <button id="botaoSalvarFormulario" class="botao azul-btn" onclick="salvarFormulario()">Criar formulário</button>
+                    <button id="botaoCancelarEdicaoForm" class="botao-pequeno escondido" onclick="cancelarEdicaoFormulario()">Cancelar edição</button>
+                </div>
+                <p id="erroNovoForm" class="erro" role="alert"></p>
             </div>
 
             <div class="painel">
                 <h2>Formulários existentes</h2>
+                <p id="avisoEmail" class="info-lista"></p>
                 <div id="listaFormularios"></div>
             </div>
         </section>
 
         <!-- ========== VIEW: COMENTÁRIOS ========== -->
-        <section id="viewComentarios" class="escondido">
+        <section id="viewComentarios" class="escondido" aria-labelledby="tituloComentarios">
             <div class="dashboard-topo">
                 <div>
-                    <h1>Comentários</h1>
+                    <h1 id="tituloComentarios" tabindex="-1">Comentários</h1>
                     <p>Sugestões e comentários enviados de forma anônima</p>
                     <p id="comentariosFormulario" class="subtitulo-resultados"></p>
                 </div>
@@ -303,10 +412,10 @@
         </section>
 
         <!-- ========== VIEW: FUNCIONÁRIOS ========== -->
-        <section id="viewFuncionarios" class="escondido">
+        <section id="viewFuncionarios" class="escondido" aria-labelledby="tituloFuncionarios">
             <div class="dashboard-topo">
                 <div>
-                    <h1>Funcionários</h1>
+                    <h1 id="tituloFuncionarios" tabindex="-1">Funcionários</h1>
                     <p>Cadastre os logins de quem responde a pesquisa (e de outros gestores)</p>
                 </div>
             </div>
@@ -339,7 +448,20 @@
                     <button id="botaoSalvarFunc" class="botao azul-btn" onclick="salvarFuncionario()">Cadastrar</button>
                     <button id="botaoCancelarEdicaoFunc" class="botao-pequeno escondido" onclick="cancelarEdicaoFuncionario()">Cancelar edição</button>
                 </div>
-                <p id="erroNovoFunc" class="erro"></p>
+                <p id="erroNovoFunc" class="erro" role="alert"></p>
+            </div>
+
+            <div class="painel">
+                <h2>Importar planilha</h2>
+                <p>Cadastre várias pessoas de uma vez com uma planilha do Excel (.xlsx) ou um arquivo .csv com as colunas nome, email, senha, cargo, data_admissao e perfil.</p>
+                <div class="importar-linha">
+                    <button class="botao-pequeno" onclick="baixarModeloImportacao()">⤓ Baixar planilha-modelo</button>
+                    <label class="sr-only" for="arquivoImportacao">Planilha para importar</label>
+                    <input id="arquivoImportacao" type="file" accept=".xlsx,.csv">
+                    <button id="botaoImportar" class="botao azul-btn botao-medio" onclick="importarPlanilha()">Importar</button>
+                </div>
+                <p id="erroImportacao" class="erro" role="alert"></p>
+                <div id="resultadoImportacao" aria-live="polite"></div>
             </div>
 
             <div class="painel">
@@ -350,38 +472,38 @@
         </section>
 
         <!-- ========== VIEW: RELATÓRIOS ========== -->
-        <section id="viewRelatorios" class="escondido">
+        <section id="viewRelatorios" class="escondido" aria-labelledby="tituloRelatorios">
             <div class="dashboard-topo">
                 <div>
-                    <h1>Relatórios e Exportações</h1>
+                    <h1 id="tituloRelatorios" tabindex="-1">Relatórios e Exportações</h1>
                     <p>Gere relatórios e exporte dados para análise externa</p>
                 </div>
             </div>
 
             <div class="grade-exportacao">
                 <div class="card-exportacao">
-                    <div class="icone-exportacao pdf">▤</div>
+                    <div class="icone-exportacao pdf" aria-hidden="true">▤</div>
                     <h2>Relatório Completo (PDF)</h2>
-                    <p>Resumo da pesquisa, estatísticas de cada pergunta e comentários, pronto para imprimir ou salvar em PDF.</p>
+                    <p>Resumo da pesquisa, médias por categoria, resultados de cada pergunta e comentários, pronto para imprimir ou salvar em PDF.</p>
                     <button class="botao-exportar pdf" onclick="exportarPdf()">⤓ Exportar PDF</button>
                 </div>
 
                 <div class="card-exportacao">
-                    <div class="icone-exportacao excel">▦</div>
+                    <div class="icone-exportacao excel" aria-hidden="true">▦</div>
                     <h2>Dados Brutos (Excel)</h2>
-                    <p>Planilha do Excel já formatada, com filtros e todas as respostas anônimas, para análise personalizada.</p>
+                    <p>Planilha formatada com filtros e todas as respostas anônimas, mais a aba Resumo com médias e percentuais calculados por fórmulas.</p>
                     <button class="botao-exportar excel" onclick="exportarExcel()">⤓ Exportar Excel</button>
                 </div>
 
                 <div class="card-exportacao">
-                    <div class="icone-exportacao txt">▱</div>
+                    <div class="icone-exportacao txt" aria-hidden="true">▱</div>
                     <h2>Comentários (TXT)</h2>
                     <p>Arquivo de texto com todos os comentários e sugestões recebidos.</p>
                     <button class="botao-exportar txt" onclick="exportarComentariosArquivo()">⤓ Exportar TXT</button>
                 </div>
 
                 <div class="card-exportacao">
-                    <div class="icone-exportacao png">▥</div>
+                    <div class="icone-exportacao png" aria-hidden="true">▥</div>
                     <h2>Gráficos (PNG)</h2>
                     <p>Imagem com os gráficos de evolução e de distribuição de satisfação.</p>
                     <button class="botao-exportar png" onclick="exportarGraficoPng()">⤓ Exportar PNG</button>
@@ -390,7 +512,7 @@
 
             <div class="dica-analise">
                 <b>💡 Dica de análise</b>
-                Para uma análise mais aprofundada, exporte os dados brutos para o Excel e use tabelas dinâmicas para cruzar as notas das perguntas e identificar padrões ao longo do período.
+                Para uma análise mais aprofundada, exporte os dados brutos para o Excel: a aba Resumo já traz as médias por pergunta e por categoria, e a aba Respostas permite usar filtros e tabelas dinâmicas para identificar padrões ao longo do período.
             </div>
 
             <div class="painel">

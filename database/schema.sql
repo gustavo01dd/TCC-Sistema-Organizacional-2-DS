@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS funcionarios (
     data_admissao DATE NULL,
     tipo_perfil ENUM('funcionario', 'gestor') NOT NULL DEFAULT 'funcionario',
     ativo TINYINT(1) NOT NULL DEFAULT 1,
+    termo_versao INT UNSIGNED NULL,
+    termo_aceito_em DATETIME NULL,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -62,11 +64,17 @@ CREATE TABLE IF NOT EXISTS controle_acesso (
 
 -- ------------------------------------------------------------
 -- perguntas: pertencem a um formulário
+-- tipo: nota (0 a 10), sim_nao ou multipla (uma opção entre várias)
+-- opcoes: lista das alternativas em JSON (só para multipla)
+-- categoria: agrupa perguntas (ex.: Liderança, Comunicação)
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS perguntas (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     formulario_id INT UNSIGNED NOT NULL,
     texto VARCHAR(255) NOT NULL,
+    tipo ENUM('nota', 'sim_nao', 'multipla') NOT NULL DEFAULT 'nota',
+    opcoes TEXT NULL,
+    categoria VARCHAR(60) NULL,
     ordem TINYINT UNSIGNED NOT NULL DEFAULT 0,
     CONSTRAINT fk_pergunta_formulario FOREIGN KEY (formulario_id) REFERENCES formularios(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -74,6 +82,7 @@ CREATE TABLE IF NOT EXISTS perguntas (
 -- ------------------------------------------------------------
 -- respostas: um envio de pesquisa. SEM nenhum vínculo com o
 -- funcionário: o conteúdo é anônimo mesmo com login (RN05).
+-- O comentário fica criptografado (AES-256-GCM, RNF05).
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS respostas (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -84,13 +93,16 @@ CREATE TABLE IF NOT EXISTS respostas (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
--- resposta_itens: a nota (0 a 10) de cada pergunta em um envio
+-- resposta_itens: a resposta de cada pergunta em um envio
+--   nota: perguntas do tipo nota (0 a 10)
+--   opcao: sim_nao (0 = não, 1 = sim) ou multipla (posição da alternativa)
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS resposta_itens (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     resposta_id BIGINT UNSIGNED NOT NULL,
     pergunta_id INT UNSIGNED NOT NULL,
-    nota TINYINT UNSIGNED NOT NULL,
+    nota TINYINT UNSIGNED NULL,
+    opcao TINYINT UNSIGNED NULL,
     CONSTRAINT fk_item_resposta FOREIGN KEY (resposta_id) REFERENCES respostas(id) ON DELETE CASCADE,
     CONSTRAINT fk_item_pergunta FOREIGN KEY (pergunta_id) REFERENCES perguntas(id) ON DELETE CASCADE,
     CONSTRAINT chk_nota CHECK (nota BETWEEN 0 AND 10)
@@ -98,7 +110,7 @@ CREATE TABLE IF NOT EXISTS resposta_itens (
 
 -- ------------------------------------------------------------
 -- relatorios: relatório consolidado gerado automaticamente
--- quando a pesquisa é encerrada (RN08, RF06)
+-- quando a pesquisa é encerrada (RN08, RF06). Guardado criptografado.
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS relatorios (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -118,4 +130,19 @@ CREATE TABLE IF NOT EXISTS logs_acesso (
     email VARCHAR(100) NOT NULL,
     acao VARCHAR(20) NOT NULL,
     data_hora DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- notificacoes: e-mails de abertura, encerramento e lembrete
+-- já enviados (RF08). A chave única impede envio duplicado.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS notificacoes (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    formulario_id INT UNSIGNED NOT NULL,
+    tipo VARCHAR(20) NOT NULL,
+    chave VARCHAR(100) NOT NULL UNIQUE,
+    enviada_em DATETIME NOT NULL,
+    destinatarios INT UNSIGNED NOT NULL DEFAULT 0,
+    falhas INT UNSIGNED NOT NULL DEFAULT 0,
+    CONSTRAINT fk_notificacao_formulario FOREIGN KEY (formulario_id) REFERENCES formularios(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

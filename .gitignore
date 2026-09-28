@@ -2,3 +2,5 @@ backups/
 docker/mariadb_data/
 *.log
 .env
+# chave de criptografia dos comentários (guarde junto com os backups, fora do git)
+database/chave.key

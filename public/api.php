@@ -47,7 +47,7 @@ function exigirGestor($pdo) {
     return $usuario;
 }
 
-function exigirFuncionario($pdo) {
+function exigirFuncionario($pdo, $exigirTermo = true) {
     $usuario = usuarioLogado($pdo);
     if (!$usuario) {
         responderJson(['erro' => 'Faça login para acessar a pesquisa'], 401);
@@ -55,44 +55,70 @@ function exigirFuncionario($pdo) {
     if ($usuario['tipo_perfil'] !== 'funcionario') {
         responderJson(['erro' => 'A pesquisa é respondida pelos funcionários. Gestores acompanham os resultados pelo painel.'], 403);
     }
+    // RNF09: sem o aceite do termo de consentimento, não responde
+    if ($exigirTermo && !termoAceito($usuario)) {
+        responderJson(['erro' => 'É preciso aceitar o termo de consentimento antes de responder.', 'precisa_termo' => true], 403);
+    }
     return $usuario;
 }
 
 function validarDadosFuncionario($dados, $senhaObrigatoria) {
-    $nome = trim((string)($dados['nome'] ?? ''));
-    $email = trim((string)($dados['email'] ?? ''));
-    $senha = (string)($dados['senha'] ?? '');
-    $cargo = trim((string)($dados['cargo'] ?? ''));
-    $dataAdmissao = trim((string)($dados['data_admissao'] ?? ''));
-    $perfil = (string)($dados['tipo_perfil'] ?? 'funcionario');
+    [$d, $erro] = validarCadastro($dados, $senhaObrigatoria);
+    if ($erro) {
+        responderJson(['erro' => $erro], 400);
+    }
+    return $d;
+}
 
-    if ($nome === '' || $email === '') {
-        responderJson(['erro' => 'Informe o nome e o email'], 400);
+function buscarFormularioOu404($pdo, $formularioId, $campos = 'id, titulo, status') {
+    $stmt = $pdo->prepare("SELECT $campos FROM formularios WHERE id = ?");
+    $stmt->execute([(int)$formularioId]);
+    $formulario = $stmt->fetch();
+    if (!$formulario) {
+        responderJson(['erro' => 'Formulário não encontrado'], 404);
     }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        responderJson(['erro' => 'Email inválido'], 400);
+    return $formulario;
+}
+
+function formularioAnalisado($pdo) {
+    $formularioId = resolverFormularioId($pdo, $_GET['formulario_id'] ?? null);
+    if (!$formularioId) {
+        responderJson(['erro' => 'Nenhum formulário cadastrado ainda'], 404);
     }
-    if (tamanhoTexto($nome) > 100 || tamanhoTexto($email) > 100 || tamanhoTexto($cargo) > 50) {
-        responderJson(['erro' => 'Texto muito longo (nome e email até 100 caracteres, cargo até 50)'], 400);
+    return $formularioId;
+}
+
+// título, datas e respondentes esperados de criar_formulario e editar_formulario
+function validarDadosFormulario($dados) {
+    $titulo = trim((string)($dados['titulo'] ?? ''));
+    $esperados = !empty($dados['respondentes_esperados']) ? (int)$dados['respondentes_esperados'] : null;
+    $abertura = validarDataHora($dados['data_abertura'] ?? null);
+    $fechamento = validarDataHora($dados['data_fechamento'] ?? null);
+
+    if ($titulo === '') {
+        responderJson(['erro' => 'Informe um título e ao menos uma pergunta'], 400);
     }
-    if (($senhaObrigatoria || $senha !== '') && strlen($senha) < 6) {
-        responderJson(['erro' => 'A senha precisa ter pelo menos 6 caracteres'], 400);
+    if (tamanhoTexto($titulo) > 150) {
+        responderJson(['erro' => 'O título pode ter no máximo 150 caracteres'], 400);
     }
-    if (!in_array($perfil, ['funcionario', 'gestor'], true)) {
-        responderJson(['erro' => 'Perfil inválido'], 400);
+    if ($abertura === false || $fechamento === false) {
+        responderJson(['erro' => 'Data inválida'], 400);
     }
-    if (validarData($dataAdmissao) === false) {
-        responderJson(['erro' => 'Data de admissão inválida'], 400);
+    if ($abertura && $fechamento && strtotime($fechamento) <= strtotime($abertura)) {
+        responderJson(['erro' => 'A data de término deve ser depois da data de início'], 400);
+    }
+    if ($fechamento && strtotime($fechamento) <= time()) {
+        responderJson(['erro' => 'A data de término já passou'], 400);
+    }
+    if ($esperados !== null && $esperados < 1) {
+        $esperados = null;
     }
 
-    return [
-        'nome' => $nome,
-        'email' => $email,
-        'senha' => $senha,
-        'cargo' => $cargo !== '' ? $cargo : null,
-        'data_admissao' => $dataAdmissao !== '' ? $dataAdmissao : null,
-        'perfil' => $perfil,
-    ];
+    [$perguntas, $erro] = validarPerguntas($dados['perguntas'] ?? []);
+    if ($erro) {
+        responderJson(['erro' => $erro], 400);
+    }
+    return [$titulo, $esperados, $abertura, $fechamento, $perguntas];
 }
 
 
@@ -106,8 +132,9 @@ try {
 
 try {
     processarEncerramentos($pdo);
-} catch (PDOException $e) {
-    error_log('Erro ao processar encerramentos: ' . $e->getMessage());
+    processarNotificacoes($pdo);
+} catch (Throwable $e) {
+    error_log('Erro ao processar encerramentos/notificações: ' . $e->getMessage());
 }
 
 
@@ -141,7 +168,7 @@ try {
             $email = trim((string)($dados['email'] ?? ''));
             $senha = (string)($dados['senha'] ?? '');
 
-            $stmt = $pdo->prepare("SELECT id, nome, email, senha_hash, tipo_perfil, ativo FROM funcionarios WHERE email = ?");
+            $stmt = $pdo->prepare("SELECT id, nome, email, senha_hash, tipo_perfil, ativo, termo_versao FROM funcionarios WHERE email = ?");
             $stmt->execute([$email]);
             $usuario = $stmt->fetch();
 
@@ -151,7 +178,13 @@ try {
                 if ($usuario['tipo_perfil'] === 'gestor') {
                     registrarLog($pdo, (int)$usuario['id'], $usuario['email'], 'login');
                 }
-                responderJson(['sucesso' => true, 'nome' => $usuario['nome'], 'perfil' => $usuario['tipo_perfil']]);
+                responderJson([
+                    'sucesso' => true,
+                    'id' => (int)$usuario['id'],
+                    'nome' => $usuario['nome'],
+                    'perfil' => $usuario['tipo_perfil'],
+                    'precisa_termo' => !termoAceito($usuario),
+                ]);
             }
 
             if ($usuario && $usuario['tipo_perfil'] === 'gestor') {
@@ -171,8 +204,17 @@ try {
             break;
 
         // =======================================================
-        // FUNCIONÁRIO: responder a pesquisa
+        // FUNCIONÁRIO: termo de consentimento e pesquisa
         // =======================================================
+
+        // RNF09: aceite do termo (a data fica registrada como comprovante)
+        case 'aceitar_termo':
+            exigirMetodo('POST');
+            $usuario = exigirFuncionario($pdo, false);
+            $stmt = $pdo->prepare("UPDATE funcionarios SET termo_versao = ?, termo_aceito_em = NOW() WHERE id = ?");
+            $stmt->execute([VERSAO_TERMO, $usuario['id']]);
+            responderJson(['sucesso' => true]);
+            break;
 
         case 'formulario_ativo':
             $usuario = exigirFuncionario($pdo);
@@ -187,10 +229,8 @@ try {
                 responderJson(['erro' => $bloqueio], 403);
             }
 
-            $stmt = $pdo->prepare("SELECT id, texto FROM perguntas WHERE formulario_id = ? ORDER BY ordem, id");
-            $stmt->execute([$formulario['id']]);
-            $formulario['perguntas'] = $stmt->fetchAll();
-
+            $formulario['id'] = (int)$formulario['id'];
+            $formulario['perguntas'] = buscarPerguntas($pdo, $formulario['id']);
             responderJson($formulario);
             break;
 
@@ -217,24 +257,37 @@ try {
                 responderJson(['erro' => $bloqueio], 403);
             }
 
-            // todas as perguntas do formulário, cada uma com uma nota de 0 a 10
-            $stmt = $pdo->prepare("SELECT id FROM perguntas WHERE formulario_id = ?");
-            $stmt->execute([$formularioId]);
-            $idsValidos = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
-
+            // cada pergunta do formulário precisa de uma resposta válida para o seu tipo
+            $perguntas = [];
+            foreach (buscarPerguntas($pdo, $formularioId) as $p) {
+                $perguntas[$p['id']] = $p;
+            }
             if (!is_array($itens)) {
                 responderJson(['erro' => 'Resposta inválida'], 400);
             }
-            $notasPorPergunta = [];
+            $respostasValidas = [];
             foreach ($itens as $item) {
                 $perguntaId = (int)($item['pergunta_id'] ?? 0);
-                $nota = $item['nota'] ?? null;
-                if (!in_array($perguntaId, $idsValidos, true) || !is_numeric($nota) || (int)$nota < 0 || (int)$nota > 10) {
+                if (!isset($perguntas[$perguntaId])) {
                     responderJson(['erro' => 'Resposta inválida'], 400);
                 }
-                $notasPorPergunta[$perguntaId] = (int)$nota;
+                $pergunta = $perguntas[$perguntaId];
+                if ($pergunta['tipo'] === 'nota') {
+                    $nota = $item['nota'] ?? null;
+                    if (!is_numeric($nota) || (int)$nota < 0 || (int)$nota > 10) {
+                        responderJson(['erro' => 'Resposta inválida'], 400);
+                    }
+                    $respostasValidas[$perguntaId] = ['nota' => (int)$nota, 'opcao' => null];
+                } else {
+                    $opcao = $item['opcao'] ?? null;
+                    $limite = $pergunta['tipo'] === 'sim_nao' ? 2 : count($pergunta['opcoes']);
+                    if (!is_numeric($opcao) || (int)$opcao < 0 || (int)$opcao >= $limite) {
+                        responderJson(['erro' => 'Resposta inválida'], 400);
+                    }
+                    $respostasValidas[$perguntaId] = ['nota' => null, 'opcao' => (int)$opcao];
+                }
             }
-            if (count($notasPorPergunta) !== count($idsValidos)) {
+            if (count($respostasValidas) !== count($perguntas)) {
                 responderJson(['erro' => 'Responda todas as perguntas antes de enviar.'], 400);
             }
 
@@ -246,14 +299,15 @@ try {
                 $stmt = $pdo->prepare("INSERT INTO controle_acesso (funcionario_id, formulario_id, respondeu, data_resposta) VALUES (?, ?, 1, CURDATE())");
                 $stmt->execute([(int)$usuario['id'], $formularioId]);
 
-                // 2) conteúdo anônimo: nada aqui aponta para o funcionário (RN05)
+                // 2) conteúdo anônimo: nada aqui aponta para o funcionário (RN05);
+                //    o comentário é gravado criptografado (RNF05)
                 $stmt = $pdo->prepare("INSERT INTO respostas (formulario_id, comentario) VALUES (?, ?)");
-                $stmt->execute([$formularioId, $comentario !== '' ? $comentario : null]);
+                $stmt->execute([$formularioId, $comentario !== '' ? criptografar($comentario) : null]);
                 $respostaId = $pdo->lastInsertId();
 
-                $stmtItem = $pdo->prepare("INSERT INTO resposta_itens (resposta_id, pergunta_id, nota) VALUES (?, ?, ?)");
-                foreach ($notasPorPergunta as $perguntaId => $nota) {
-                    $stmtItem->execute([$respostaId, $perguntaId, $nota]);
+                $stmtItem = $pdo->prepare("INSERT INTO resposta_itens (resposta_id, pergunta_id, nota, opcao) VALUES (?, ?, ?, ?)");
+                foreach ($respostasValidas as $perguntaId => $r) {
+                    $stmtItem->execute([$respostaId, $perguntaId, $r['nota'], $r['opcao']]);
                 }
 
                 $pdo->commit();
@@ -267,7 +321,7 @@ try {
                 throw $e;
             }
 
-            responderJson(['sucesso' => true]);
+            responderJson(['sucesso' => true, 'data' => date('Y-m-d')]);
             break;
 
         // =======================================================
@@ -284,12 +338,13 @@ try {
             // Só isso: o conteúdo das respostas continua sem ligação com a pessoa.
             $stmt = $pdo->prepare("
                 SELECT f.id, f.nome, f.email, f.cargo, f.data_admissao, f.tipo_perfil, f.ativo,
+                       f.termo_aceito_em, (f.termo_versao >= ?) AS termo_em_dia,
                        (ca.funcionario_id IS NOT NULL) AS respondeu_atual
                 FROM funcionarios f
                 LEFT JOIN controle_acesso ca ON ca.funcionario_id = f.id AND ca.formulario_id = ?
                 ORDER BY f.tipo_perfil DESC, f.nome
             ");
-            $stmt->execute([$formularioAtual ? $formularioAtual['id'] : 0]);
+            $stmt->execute([VERSAO_TERMO, $formularioAtual ? $formularioAtual['id'] : 0]);
 
             responderJson([
                 'meu_id' => (int)$gestor['id'],
@@ -388,6 +443,38 @@ try {
             responderJson(['sucesso' => true]);
             break;
 
+        // importação por planilha (.xlsx ou .csv)
+        case 'importar_funcionarios':
+            exigirGestor($pdo);
+            exigirMetodo('POST');
+            $arquivo = $_FILES['arquivo'] ?? null;
+            if (!$arquivo || ($arquivo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                responderJson(['erro' => 'Escolha uma planilha para importar.'], 400);
+            }
+            if ($arquivo['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($arquivo['tmp_name'])) {
+                responderJson(['erro' => 'Não foi possível receber o arquivo. Tente novamente.'], 400);
+            }
+            if ($arquivo['size'] > 2 * 1024 * 1024) {
+                responderJson(['erro' => 'A planilha pode ter no máximo 2 MB.'], 400);
+            }
+            try {
+                $linhas = lerPlanilhaImportacao($arquivo['tmp_name'], $arquivo['name']);
+                $resultado = importarCadastros($pdo, $linhas);
+            } catch (RuntimeException $e) {
+                responderJson(['erro' => $e->getMessage()], 400);
+            }
+            responderJson(['sucesso' => true] + $resultado);
+            break;
+
+        case 'modelo_importacao':
+            exigirGestor($pdo);
+            $arquivo = gerarModeloImportacao();
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="modelo_importacao_funcionarios.xlsx"');
+            header('Content-Length: ' . strlen($arquivo));
+            echo $arquivo;
+            exit;
+
         // =======================================================
         // GESTOR: formulários (RF02)
         // =======================================================
@@ -397,65 +484,98 @@ try {
             $stmt = $pdo->query("
                 SELECT f.id, f.titulo, f.status, f.respondentes_esperados, f.data_abertura, f.data_fechamento,
                        (SELECT COUNT(*) FROM respostas r WHERE r.formulario_id = f.id) AS total_respostas,
-                       rel.data_geracao AS relatorio_gerado_em
+                       (SELECT COUNT(*) FROM perguntas p WHERE p.formulario_id = f.id) AS total_perguntas,
+                       rel.data_geracao AS relatorio_gerado_em,
+                       (SELECT MAX(enviada_em) FROM notificacoes n WHERE n.formulario_id = f.id AND n.tipo = 'abertura' AND n.destinatarios > 0) AS email_abertura_em,
+                       (SELECT MAX(enviada_em) FROM notificacoes n WHERE n.formulario_id = f.id AND n.tipo = 'encerramento' AND n.destinatarios > 0) AS email_encerramento_em,
+                       (SELECT MAX(enviada_em) FROM notificacoes n WHERE n.formulario_id = f.id AND n.tipo = 'lembrete') AS lembrete_em,
+                       (f.status = 'ativo' AND (f.data_abertura IS NULL OR f.data_abertura <= NOW()) AND (f.data_fechamento IS NULL OR f.data_fechamento >= NOW())) AS aberta_agora
                 FROM formularios f
                 LEFT JOIN relatorios rel ON rel.formulario_id = f.id
                 ORDER BY f.criado_em DESC, f.id DESC
             ");
-            responderJson($stmt->fetchAll());
+            responderJson(['email_ativo' => emailAtivo(), 'formularios' => $stmt->fetchAll()]);
+            break;
+
+        // dados completos de um formulário, para edição
+        case 'detalhes_formulario':
+            exigirGestor($pdo);
+            $formulario = buscarFormularioOu404($pdo, $_GET['formulario_id'] ?? 0, 'id, titulo, status, respondentes_esperados, data_abertura, data_fechamento');
+            $formulario['total_respostas'] = contarRespostas($pdo, (int)$formulario['id']);
+            $formulario['perguntas'] = buscarPerguntas($pdo, (int)$formulario['id']);
+            responderJson($formulario);
             break;
 
         case 'criar_formulario':
             exigirGestor($pdo);
             exigirMetodo('POST');
-            $dados = corpoJson();
-            $titulo = trim((string)($dados['titulo'] ?? ''));
-            $perguntasTexto = is_array($dados['perguntas'] ?? null) ? $dados['perguntas'] : [];
-            $esperados = !empty($dados['respondentes_esperados']) ? (int)$dados['respondentes_esperados'] : null;
-            $abertura = validarDataHora($dados['data_abertura'] ?? null);
-            $fechamento = validarDataHora($dados['data_fechamento'] ?? null);
-
-            $perguntasValidas = array_values(array_filter(array_map(fn($t) => trim((string)$t), $perguntasTexto), fn($t) => $t !== ''));
-
-            if ($titulo === '' || count($perguntasValidas) < 1) {
-                responderJson(['erro' => 'Informe um título e ao menos uma pergunta'], 400);
-            }
-            if (tamanhoTexto($titulo) > 150) {
-                responderJson(['erro' => 'O título pode ter no máximo 150 caracteres'], 400);
-            }
-            foreach ($perguntasValidas as $texto) {
-                if (tamanhoTexto($texto) > 255) {
-                    responderJson(['erro' => 'Cada pergunta pode ter no máximo 255 caracteres'], 400);
-                }
-            }
-            if (count($perguntasValidas) > 50) {
-                responderJson(['erro' => 'Máximo de 50 perguntas por formulário'], 400);
-            }
-            if ($abertura === false || $fechamento === false) {
-                responderJson(['erro' => 'Data inválida'], 400);
-            }
-            if ($abertura && $fechamento && strtotime($fechamento) <= strtotime($abertura)) {
-                responderJson(['erro' => 'A data de término deve ser depois da data de início'], 400);
-            }
-            if ($fechamento && strtotime($fechamento) <= time()) {
-                responderJson(['erro' => 'A data de término já passou'], 400);
-            }
-            if ($esperados !== null && $esperados < 1) {
-                $esperados = null;
-            }
+            [$titulo, $esperados, $abertura, $fechamento, $perguntas] = validarDadosFormulario(corpoJson());
 
             $pdo->beginTransaction();
             $stmt = $pdo->prepare("INSERT INTO formularios (titulo, respondentes_esperados, status, data_abertura, data_fechamento) VALUES (?, ?, 'rascunho', ?, ?)");
             $stmt->execute([$titulo, $esperados, $abertura, $fechamento]);
             $formularioId = (int)$pdo->lastInsertId();
-
-            $stmtP = $pdo->prepare("INSERT INTO perguntas (formulario_id, texto, ordem) VALUES (?, ?, ?)");
-            foreach ($perguntasValidas as $i => $texto) {
-                $stmtP->execute([$formularioId, $texto, $i + 1]);
-            }
+            salvarPerguntas($pdo, $formularioId, $perguntas);
             $pdo->commit();
 
             responderJson(['sucesso' => true, 'formulario_id' => $formularioId]);
+            break;
+
+        // só rascunhos sem respostas podem ser editados (as respostas dependem das perguntas)
+        case 'editar_formulario':
+            exigirGestor($pdo);
+            exigirMetodo('POST');
+            $dados = corpoJson();
+            $formulario = buscarFormularioOu404($pdo, $dados['formulario_id'] ?? 0);
+            if ($formulario['status'] !== 'rascunho' || contarRespostas($pdo, (int)$formulario['id']) > 0) {
+                responderJson(['erro' => 'Só é possível editar formulários em rascunho que ainda não receberam respostas.'], 409);
+            }
+            [$titulo, $esperados, $abertura, $fechamento, $perguntas] = validarDadosFormulario($dados);
+
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare("UPDATE formularios SET titulo = ?, respondentes_esperados = ?, data_abertura = ?, data_fechamento = ? WHERE id = ?");
+            $stmt->execute([$titulo, $esperados, $abertura, $fechamento, $formulario['id']]);
+            $stmt = $pdo->prepare("DELETE FROM perguntas WHERE formulario_id = ?");
+            $stmt->execute([$formulario['id']]);
+            salvarPerguntas($pdo, (int)$formulario['id'], $perguntas);
+            $pdo->commit();
+
+            responderJson(['sucesso' => true]);
+            break;
+
+        // cópia em rascunho, com as mesmas perguntas (útil para o próximo ciclo)
+        case 'duplicar_formulario':
+            exigirGestor($pdo);
+            exigirMetodo('POST');
+            $dados = corpoJson();
+            $formulario = buscarFormularioOu404($pdo, $dados['formulario_id'] ?? 0, 'id, titulo, respondentes_esperados');
+            $titulo = 'Cópia de ' . $formulario['titulo'];
+            if (tamanhoTexto($titulo) > 150) {
+                $titulo = mb_substr($titulo, 0, 150);
+            }
+            $perguntas = buscarPerguntas($pdo, (int)$formulario['id']);
+
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare("INSERT INTO formularios (titulo, respondentes_esperados, status) VALUES (?, ?, 'rascunho')");
+            $stmt->execute([$titulo, $formulario['respondentes_esperados']]);
+            $novoId = (int)$pdo->lastInsertId();
+            salvarPerguntas($pdo, $novoId, $perguntas);
+            $pdo->commit();
+
+            responderJson(['sucesso' => true, 'formulario_id' => $novoId]);
+            break;
+
+        case 'excluir_formulario':
+            exigirGestor($pdo);
+            exigirMetodo('POST');
+            $dados = corpoJson();
+            $formulario = buscarFormularioOu404($pdo, $dados['formulario_id'] ?? 0);
+            if ($formulario['status'] !== 'rascunho' || contarRespostas($pdo, (int)$formulario['id']) > 0) {
+                responderJson(['erro' => 'Só é possível excluir formulários em rascunho que ainda não receberam respostas.'], 409);
+            }
+            $stmt = $pdo->prepare("DELETE FROM formularios WHERE id = ?");
+            $stmt->execute([$formulario['id']]);
+            responderJson(['sucesso' => true]);
             break;
 
         case 'alterar_status_formulario':
@@ -469,11 +589,9 @@ try {
                 responderJson(['erro' => 'Dados inválidos'], 400);
             }
 
-            $stmt = $pdo->prepare("SELECT id, data_abertura, data_fechamento FROM formularios WHERE id = ?");
-            $stmt->execute([$formularioId]);
-            $formulario = $stmt->fetch();
-            if (!$formulario) {
-                responderJson(['erro' => 'Formulário não encontrado'], 404);
+            $formulario = buscarFormularioOu404($pdo, $formularioId, 'id, data_abertura, data_fechamento');
+            if ($novoStatus === 'ativo' && count(buscarPerguntas($pdo, $formularioId)) === 0) {
+                responderJson(['erro' => 'O formulário não tem perguntas.'], 400);
             }
 
             $pdo->beginTransaction();
@@ -515,7 +633,29 @@ try {
             }
 
             $pdo->commit();
+
+            // RF08: e-mails de abertura/encerramento saem na hora
+            try {
+                processarNotificacoes($pdo);
+            } catch (Throwable $e) {
+                error_log('Erro ao enviar notificações: ' . $e->getMessage());
+            }
             responderJson(['sucesso' => true]);
+            break;
+
+        // RF08: lembrete por e-mail para quem ainda não respondeu
+        case 'enviar_lembrete':
+            exigirGestor($pdo);
+            exigirMetodo('POST');
+            if (!emailAtivo()) {
+                responderJson(['erro' => 'O envio de e-mails não está configurado no servidor (SMTP).'], 400);
+            }
+            $dados = corpoJson();
+            [$resultado, $erro] = enviarLembrete($pdo, (int)($dados['formulario_id'] ?? 0));
+            if ($erro) {
+                responderJson(['erro' => $erro], 409);
+            }
+            responderJson(['sucesso' => true] + $resultado);
             break;
 
         // =======================================================
@@ -524,22 +664,13 @@ try {
 
         case 'dashboard':
             exigirGestor($pdo);
-            $formularioId = resolverFormularioId($pdo, $_GET['formulario_id'] ?? null);
-            if (!$formularioId) {
-                responderJson(['erro' => 'Nenhum formulário cadastrado ainda'], 404);
-            }
-
-            $stmt = $pdo->prepare("SELECT id, titulo, status, respondentes_esperados, data_abertura, data_fechamento FROM formularios WHERE id = ?");
-            $stmt->execute([$formularioId]);
-            $formulario = $stmt->fetch();
-            if (!$formulario) {
-                responderJson(['erro' => 'Formulário não encontrado'], 404);
-            }
+            $formularioId = formularioAnalisado($pdo);
+            $formulario = buscarFormularioOu404($pdo, $formularioId, 'id, titulo, status, respondentes_esperados, data_abertura, data_fechamento');
 
             $total = contarRespostas($pdo, $formularioId);
             $ocultos = dadosOcultos($total);
 
-            // do pior para o melhor; perguntas sem média vão para o fim
+            // do pior para o melhor; perguntas sem média (ou que não são de nota) vão para o fim
             $porPergunta = buscarResultadosPorPergunta($pdo, $formularioId, 'completo');
             usort($porPergunta, fn($a, $b) => [$a['media'] === null, $a['media']] <=> [$b['media'] === null, $b['media']]);
 
@@ -560,6 +691,7 @@ try {
                 'respondentes_esperados' => $esperados,
                 'taxa_participacao' => $taxa,
                 'por_pergunta' => $porPergunta,
+                'categorias' => $ocultos ? [] : calcularMediasPorCategoria($pdo, $formularioId),
                 'distribuicao' => $ocultos ? ['insatisfeito' => 0, 'neutro' => 0, 'satisfeito' => 0] : calcularDistribuicao($pdo, $formularioId),
                 'evolucao' => $evolucao,
             ]);
@@ -567,18 +699,9 @@ try {
 
         case 'resultados':
             exigirGestor($pdo);
-            $formularioId = resolverFormularioId($pdo, $_GET['formulario_id'] ?? null);
-            if (!$formularioId) {
-                responderJson(['erro' => 'Nenhum formulário cadastrado ainda'], 404);
-            }
+            $formularioId = formularioAnalisado($pdo);
             $periodo = in_array($_GET['periodo'] ?? '', ['7', '30', 'completo'], true) ? $_GET['periodo'] : 'completo';
-
-            $stmt = $pdo->prepare("SELECT id, titulo FROM formularios WHERE id = ?");
-            $stmt->execute([$formularioId]);
-            $formulario = $stmt->fetch();
-            if (!$formulario) {
-                responderJson(['erro' => 'Formulário não encontrado'], 404);
-            }
+            $formulario = buscarFormularioOu404($pdo, $formularioId, 'id, titulo');
 
             responderJson([
                 'formulario' => $formulario,
@@ -588,19 +711,25 @@ try {
             ]);
             break;
 
-        case 'comentarios':
+        // comparação entre duas pesquisas (a = principal, b = referência)
+        case 'comparar':
             exigirGestor($pdo);
-            $formularioId = resolverFormularioId($pdo, $_GET['formulario_id'] ?? null);
-            if (!$formularioId) {
-                responderJson(['erro' => 'Nenhum formulário cadastrado ainda'], 404);
+            $a = (int)($_GET['a'] ?? 0);
+            $b = (int)($_GET['b'] ?? 0);
+            if (!$a || !$b || $a === $b) {
+                responderJson(['erro' => 'Escolha duas pesquisas diferentes para comparar.'], 400);
             }
-
-            $stmt = $pdo->prepare("SELECT id, titulo FROM formularios WHERE id = ?");
-            $stmt->execute([$formularioId]);
-            $formulario = $stmt->fetch();
-            if (!$formulario) {
+            $comparacao = compararFormularios($pdo, $a, $b);
+            if (!$comparacao) {
                 responderJson(['erro' => 'Formulário não encontrado'], 404);
             }
+            responderJson($comparacao);
+            break;
+
+        case 'comentarios':
+            exigirGestor($pdo);
+            $formularioId = formularioAnalisado($pdo);
+            $formulario = buscarFormularioOu404($pdo, $formularioId, 'id, titulo');
 
             $total = contarRespostas($pdo, $formularioId);
             $ocultos = dadosOcultos($total);
@@ -618,47 +747,47 @@ try {
         // GESTOR: exportações (Relatórios) e logs
         // =======================================================
 
-        // Planilha do Excel (.xlsx) já formatada, com todas as respostas anônimas
+        // Planilha do Excel (.xlsx) formatada, com a aba Resumo em fórmulas
         case 'exportar_excel':
             exigirGestor($pdo);
-            $formularioId = resolverFormularioId($pdo, $_GET['formulario_id'] ?? null);
-            if (!$formularioId) {
-                responderJson(['erro' => 'Nenhum formulário cadastrado ainda'], 404);
-            }
+            $formularioId = formularioAnalisado($pdo);
 
             $total = contarRespostas($pdo, $formularioId);
             if (dadosOcultos($total)) {
                 responderJson(['erro' => "Exportação indisponível: este formulário tem $total resposta(s). Para proteger o anonimato, é preciso ter pelo menos " . MINIMO_RESPOSTAS_ANONIMATO . '.'], 403);
             }
 
-            $stmt = $pdo->prepare("SELECT titulo, data_abertura, data_fechamento FROM formularios WHERE id = ?");
-            $stmt->execute([$formularioId]);
-            $formulario = $stmt->fetch();
-            if (!$formulario) {
-                responderJson(['erro' => 'Formulário não encontrado'], 404);
-            }
-
-            $stmt = $pdo->prepare("SELECT id, texto FROM perguntas WHERE formulario_id = ? ORDER BY ordem, id");
-            $stmt->execute([$formularioId]);
-            $perguntas = $stmt->fetchAll();
+            $formulario = buscarFormularioOu404($pdo, $formularioId, 'titulo, data_abertura, data_fechamento');
+            $perguntas = buscarPerguntas($pdo, $formularioId);
 
             // sem id e sem hora, em ordem aleatória dentro do dia (RN07)
             $stmt = $pdo->prepare("SELECT id, comentario, DATE(criada_em) AS data_envio FROM respostas WHERE formulario_id = ? ORDER BY DATE(criada_em), RAND()");
             $stmt->execute([$formularioId]);
             $respostas = $stmt->fetchAll();
 
-            $stmtItens = $pdo->prepare("SELECT pergunta_id, nota FROM resposta_itens WHERE resposta_id = ?");
+            $stmtItens = $pdo->prepare("SELECT pergunta_id, nota, opcao FROM resposta_itens WHERE resposta_id = ?");
             $linhas = [];
             foreach ($respostas as $resposta) {
                 $stmtItens->execute([$resposta['id']]);
-                $notas = [];
+                $itens = [];
                 foreach ($stmtItens->fetchAll() as $item) {
-                    $notas[(int)$item['pergunta_id']] = (int)$item['nota'];
+                    $itens[(int)$item['pergunta_id']] = $item;
+                }
+                $valores = [];
+                foreach ($perguntas as $p) {
+                    $item = $itens[$p['id']] ?? null;
+                    if (!$item) {
+                        $valores[] = null;
+                    } elseif ($p['tipo'] === 'nota') {
+                        $valores[] = $item['nota'] === null ? null : (int)$item['nota'];
+                    } else {
+                        $valores[] = $item['opcao'] === null ? null : (rotulosOpcoes($p)[(int)$item['opcao']] ?? null);
+                    }
                 }
                 $linhas[] = [
                     'data' => $resposta['data_envio'],
-                    'notas' => array_map(fn($p) => $notas[(int)$p['id']] ?? null, $perguntas),
-                    'comentario' => (string)($resposta['comentario'] ?? ''),
+                    'valores' => $valores,
+                    'comentario' => (string)descriptografar($resposta['comentario'] ?? ''),
                 ];
             }
 
@@ -668,7 +797,7 @@ try {
                     . ($formulario['data_fechamento'] ? date('d/m/Y', strtotime($formulario['data_fechamento'])) : 'em aberto');
             }
 
-            $arquivo = gerarPlanilhaRespostas($formulario['titulo'], $subtitulo, array_column($perguntas, 'texto'), $linhas);
+            $arquivo = gerarPlanilhaRespostas($formulario['titulo'], $subtitulo, $perguntas, $linhas);
 
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             header('Content-Disposition: attachment; filename="respostas_pesquisa_' . $formularioId . '.xlsx"');
@@ -678,19 +807,14 @@ try {
 
         case 'exportar_comentarios':
             exigirGestor($pdo);
-            $formularioId = resolverFormularioId($pdo, $_GET['formulario_id'] ?? null);
-            if (!$formularioId) {
-                responderJson(['erro' => 'Nenhum formulário cadastrado ainda'], 404);
-            }
+            $formularioId = formularioAnalisado($pdo);
 
             $total = contarRespostas($pdo, $formularioId);
             if (dadosOcultos($total)) {
                 responderJson(['erro' => "Exportação indisponível: este formulário tem $total resposta(s). Para proteger o anonimato, é preciso ter pelo menos " . MINIMO_RESPOSTAS_ANONIMATO . '.'], 403);
             }
 
-            $stmt = $pdo->prepare("SELECT titulo FROM formularios WHERE id = ?");
-            $stmt->execute([$formularioId]);
-            $titulo = (string)$stmt->fetchColumn();
+            $titulo = (string)buscarFormularioOu404($pdo, $formularioId, 'titulo')['titulo'];
             $comentarios = buscarComentarios($pdo, $formularioId);
 
             header('Content-Type: text/plain; charset=utf-8');
@@ -720,8 +844,8 @@ try {
         $pdo->rollBack();
     }
     error_log("Erro de banco na ação '$action': " . $e->getMessage());
-    if ($e->getCode() === '42S02') {
-        responderJson(['erro' => 'Falta criar tabelas no banco. Rode o seed: docker compose exec php php /var/www/database/seed.php'], 500);
+    if (in_array($e->getCode(), ['42S02', '42S22'], true)) {
+        responderJson(['erro' => 'O banco de dados está desatualizado. Rode o seed: docker compose exec php php /var/www/database/seed.php'], 500);
     }
     responderJson(['erro' => 'Erro interno no banco de dados. Tente novamente.'], 500);
 }

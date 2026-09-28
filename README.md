@@ -3,9 +3,38 @@
 Sistema web para aplicar pesquisas de clima organizacional com **respostas anônimas**.
 Os funcionários entram com email e senha só para o sistema controlar quem já participou;
 o conteúdo das respostas nunca fica ligado à pessoa. Os gestores acompanham os resultados
-em um painel com dashboard, resultados por pergunta, comentários, cadastro de funcionários
-e relatórios. O visual usa fundos em azul e tem **modo escuro**, ligado pelo botão ☾ no topo
-das telas ou pelo item "Modo escuro" no menu do painel.
+em um painel com dashboard, resultados por pergunta e por categoria, comparação entre ciclos,
+comentários, cadastro de funcionários e relatórios. O visual usa fundos em azul e tem **modo escuro**,
+ligado pelo botão ☾ no topo das telas ou pelo item "Modo escuro" no menu do painel.
+
+## Funcionalidades
+
+**Para quem responde**
+
+- Termo de consentimento (LGPD) no primeiro acesso, com link para a política de privacidade.
+- Três tipos de pergunta: **nota de 0 a 10**, **sim ou não** e **múltipla escolha**.
+- **Rascunho automático** no navegador: se a página fechar ou a internet cair, as respostas voltam
+  ao entrar de novo (vale por 24 horas e é apagado ao enviar ou ao clicar em Sair).
+- Tela de agradecimento depois do envio.
+- **Acessibilidade**: dá para responder tudo só com o teclado (Tab, setas, espaço), os controles têm
+  descrição para leitores de tela, o foco fica sempre visível e as animações são desligadas para
+  quem pediu "reduzir movimento" no sistema.
+- E-mails de aviso quando uma pesquisa abre, quando encerra e lembretes enviados pela gestão.
+
+**Para os gestores**
+
+- Dashboard com média geral, participação, evolução, distribuição das notas e **média por categoria**.
+- Resultados por pergunta com filtro por categoria: nota (média, mediana, desvio padrão),
+  sim/não (% de sim) e múltipla escolha (% de cada alternativa).
+- **Comparação entre ciclos**: escolha duas pesquisas e veja a diferença da média geral, de cada
+  categoria e de cada pergunta que as duas têm em comum.
+- Formulários: criar com editor de perguntas (tipo, categoria, alternativas, mudar a ordem),
+  **editar rascunhos**, **duplicar** uma pesquisa para o próximo ciclo e excluir rascunhos.
+- Botão de **lembrete por e-mail** para quem ainda não respondeu.
+- Cadastro de funcionários na tela ou **importado por planilha** (.xlsx ou .csv), com modelo pronto para baixar.
+- Exportação para Excel com a aba **Respostas** e a aba **Resumo**, que tem fórmulas
+  (médias, contagens e percentuais que se recalculam no Excel).
+- Comentários, relatório consolidado em PDF e logs de acesso.
 
 ## Tecnologias
 
@@ -15,13 +44,13 @@ Tudo roda em containers Docker, com o Nginx como servidor web.
 
 ### Linguagens de programação
 
-- **PHP 8.2**: back-end completo. API (`api.php`), regras de negócio (`funcoes.php`), login, sessões e relatório em PDF.
+- **PHP 8.2**: back-end completo. API (`api.php`), regras de negócio (`funcoes.php`), login, sessões, envio de e-mail, criptografia, leitura e geração de planilhas e relatório em PDF.
 - **JavaScript (ES6+, puro, sem frameworks)**: troca de telas, chamadas à API com `fetch` e `async/await`, gráficos e exportações.
 - **SQL**: criação do banco (`schema.sql`) e todas as consultas (médias, contagens, filtros por período, controle de quem respondeu).
 
 ### Linguagens de marcação e estilo
 
-- **HTML5**: estrutura de todas as telas (`index.php` e `relatorio_impressao.php`).
+- **HTML5**: estrutura de todas as telas (`index.php`, `privacidade.php` e `relatorio_impressao.php`), com atributos **ARIA** para acessibilidade.
 - **CSS3**: visual, responsividade e tema claro/escuro, com variáveis CSS (custom properties), Flexbox, Grid, media queries e `conic-gradient` no gráfico de rosca.
 
 ### Formatos e arquivos de configuração
@@ -31,7 +60,7 @@ Tudo roda em containers Docker, com o Nginx como servidor web.
 - **Dockerfile**: montagem da imagem do PHP.
 - **Shell script (sh)**: rotina do backup diário, dentro do `docker-compose.yml`.
 - **Markdown**: este `README.md`.
-- **XLSX (Office Open XML)**: planilha do Excel com as respostas, gerada direto em PHP e já formatada (um .xlsx é um arquivo ZIP com XMLs dentro).
+- **XLSX (Office Open XML)**: planilha do Excel com as respostas e o resumo com fórmulas, gerada direto em PHP e já formatada (um .xlsx é um arquivo ZIP com XMLs dentro). O sistema também **lê** .xlsx e .csv para importar funcionários.
 - **TXT e PNG**: exportações dos comentários e dos gráficos.
 
 ### Banco de dados
@@ -41,24 +70,31 @@ Tudo roda em containers Docker, com o Nginx como servidor web.
 
 ### Servidor e infraestrutura
 
-- **Docker** e **Docker Compose**: sobem o sistema inteiro com um comando, em 4 containers (nginx, php, mariadb e backup).
+- **Docker** e **Docker Compose**: sobem o sistema inteiro com um comando, em 5 containers (nginx, php, mariadb, mailpit e backup).
 - **Docker Desktop no Windows (com WSL2)**: ambiente de desenvolvimento.
 - **Nginx** (imagem `nginx:alpine`): servidor web que entrega as páginas e repassa o PHP.
 - **PHP-FPM**: executa o código PHP.
 - **Volume Docker `mariadb_data`**: armazenamento permanente do banco.
 - **mariadb-dump**: backup diário automático (RNF10).
+- **Mailpit** (imagem `axllent/mailpit`): servidor de e-mail de teste. Recebe os e-mails do sistema e mostra
+  numa caixa de entrada em http://localhost:8025, sem enviar nada para fora (RF08).
 
 ### Recursos nativos usados (sem bibliotecas externas)
 
 - **PDO** (PHP): acesso ao banco com *prepared statements*, que protegem contra SQL injection.
 - **password_hash com bcrypt** (PHP): senhas guardadas só como hash.
+- **OpenSSL com AES-256-GCM** (PHP): comentários e relatórios guardados criptografados no banco (RNF05).
+- **SMTP** (protocolo de e-mail), implementado em PHP com `fsockopen`: envio dos e-mails de abertura,
+  encerramento e lembrete, com suporte a TLS e login para usar o servidor de e-mail da escola.
 - **Sessões PHP** com cookie HttpOnly e SameSite: controle de login.
 - **Fetch API** (JavaScript): comunicação com o back-end.
 - **SVG**: gráfico de evolução temporal.
 - **Canvas API**: exportação dos gráficos em PNG.
 - **Impressão do navegador** (`window.print`): relatório em PDF.
 - **ZIP e XML gerados em PHP** (`gzdeflate`, `crc32`, `pack`): montagem do arquivo .xlsx sem bibliotecas externas.
-- **localStorage**: guarda no navegador a escolha de tema (claro ou escuro).
+- **ZIP e XML lidos em PHP** (`gzinflate`, `SimpleXML`): leitura das planilhas de importação.
+- **localStorage**: guarda no navegador a escolha de tema (claro ou escuro) e o rascunho das respostas.
+- **FormData** (JavaScript): envio do arquivo da planilha de importação.
 - **prefers-color-scheme**: na primeira visita, o site segue o tema do sistema (Windows ou celular).
 
 ### Ferramentas de desenvolvimento e documentação
@@ -84,7 +120,8 @@ o projeto mais complexo sem necessidade.
 │   └── php/Dockerfile
 ├── database/
 │   ├── schema.sql                estrutura do banco
-│   └── seed.php                  cria as tabelas que faltarem + dados de exemplo
+│   ├── seed.php                  cria/atualiza as tabelas + dados de exemplo
+│   └── chave.key                 chave da criptografia (criada sozinha pelo seed, fora do git)
 ├── public/
 │   ├── index.php                 todas as telas
 │   ├── style.css
@@ -92,7 +129,8 @@ o projeto mais complexo sem necessidade.
 │   ├── api.php                   rotas da API (api.php?action=...)
 │   ├── config.php                conexão com o banco, fuso horário e sessão
 │   ├── funcoes.php               regras de negócio compartilhadas
-│   ├── excel.php                 gera a planilha .xlsx formatada
+│   ├── excel.php                 gera as planilhas .xlsx e lê as planilhas de importação
+│   ├── privacidade.php           política de privacidade (modelo, LGPD)
 │   └── relatorio_impressao.php   relatório para imprimir / salvar em PDF
 └── backups/                      criada sozinha pelo backup diário
 ```
@@ -106,19 +144,32 @@ docker compose up -d --build
 docker compose exec php php /var/www/database/seed.php
 ```
 
-Depois abra **http://localhost:8080**
+Depois abra:
+
+- **http://localhost:8080**: o sistema;
+- **http://localhost:8025**: a caixa de entrada de teste com os e-mails enviados pelo sistema (Mailpit).
 
 O seed espera o banco ficar pronto sozinho e pode ser rodado quantas vezes quiser (não duplica nada).
 
 ### Atualizando de uma versão anterior deste projeto
 
-A estrutura do banco mudou. Para começar do zero (apaga os dados de teste antigos):
+Não precisa apagar o banco. Rode os mesmos dois comandos: o `--build` sobe o novo container do
+Mailpit e o seed acrescenta as colunas e tabelas novas, criptografa os comentários e relatórios que
+já existiam e completa a pesquisa de exemplo.
 
 ```bash
-docker compose down -v
 docker compose up -d --build
 docker compose exec php php /var/www/database/seed.php
 ```
+
+Se preferir começar do zero (apaga os dados de teste antigos), use `docker compose down -v` antes.
+
+### Chave de criptografia: faça backup
+
+Na primeira execução, o seed cria o arquivo **`database/chave.key`**. É com ele que os comentários e
+relatórios são criptografados. **Sem esse arquivo, os comentários já gravados não podem mais ser lidos.**
+Guarde uma cópia junto com os backups do banco e não envie para o GitHub (ele já está no `.gitignore`).
+Em produção, a chave também pode ser passada pela variável de ambiente `APP_KEY` (32 bytes em base64).
 
 ## Usuários de teste (senha `123456` para todos)
 
@@ -134,6 +185,10 @@ docker compose exec php php /var/www/database/seed.php
 - Cada funcionário responde **uma vez** por pesquisa (RN02) e só pode participar de novo depois
   de **21 dias** (RN03). Para testar com os mesmos usuários, recrie o banco (`docker compose down -v`).
 - As médias só aparecem a partir de **3 respostas** (RN07). Use os 3 funcionários de teste.
+- No primeiro acesso, cada funcionário precisa **aceitar o termo de consentimento** antes de responder.
+- A pesquisa de exemplo tem 10 perguntas de nota, 1 de sim/não e 1 de múltipla escolha, divididas em categorias.
+- Para testar a importação, baixe o modelo na tela Funcionários, preencha e envie. A linha de exemplo
+  (`maria.exemplo@escola.com`) é ignorada.
 
 ## Dados e backup (RNF10)
 
@@ -165,14 +220,18 @@ docker compose exec mariadb mariadb -u clima_user -pclima_pass clima_tcc -e "SEL
 | Tabela | O que guarda | Liga à pessoa? |
 |---|---|---|
 | `controle_acesso` | que o funcionário X respondeu o formulário Y, e em que data | Sim, mas não guarda nenhuma resposta |
-| `respostas` / `resposta_itens` | notas e comentário de cada envio | **Não**, não existe coluna de funcionário |
+| `respostas` / `resposta_itens` | notas, alternativas e comentário de cada envio | **Não**, não existe coluna de funcionário |
 
 Cuidados extras (RN07), porque o gestor vê quem já respondeu:
 
 - médias, gráficos, comentários e exportações só aparecem com pelo menos 3 respostas;
 - comentários e exportações mostram só a data (sem hora) e em ordem aleatória dentro do dia;
 - `controle_acesso` não tem id sequencial e guarda só a data, para não dar para cruzar a ordem
-  ou o horário de quem respondeu com a ordem ou o horário das respostas.
+  ou o horário de quem respondeu com a ordem ou o horário das respostas;
+- comentários e relatórios ficam criptografados no banco (AES-256-GCM): quem abrir o banco direto
+  ou um arquivo de backup não consegue lê-los sem a chave;
+- na comparação entre ciclos, os números de uma pesquisa com menos de 3 respostas ficam ocultos;
+- o rascunho fica só no navegador de quem está respondendo, nunca no servidor.
 
 ## Requisitos x implementação
 
@@ -187,26 +246,26 @@ Cuidados extras (RN07), porque o gestor vê quem já respondeu:
 | RN07 | Impedir identificação individual | ✅ | Mínimo de 3 respostas, data sem hora, ordem aleatória |
 | RN08 | Relatório automático no encerramento | ✅ | Tabela `relatorios`, gerado ao encerrar (manual ou por prazo) |
 | RF01 | Cadastro de funcionários e gestores | ✅ | Tela Funcionários: criar, editar, desativar, excluir |
-| RF02 | Criação de formulários | ✅ | Tela Formulários |
+| RF02 | Criação de formulários | ✅ | Tela Formulários: editor com 3 tipos de pergunta e categorias, editar rascunho, duplicar |
 | RF03 | Coleta anônima | ✅ | Ver RN05 |
 | RF04 | Armazenamento seguro | ✅ | PDO com prepared statements, senhas com hash, cookie de sessão protegido |
-| RF05 | Gráficos automáticos | ✅ | Dashboard (evolução, distribuição) e Resultados (barra por pergunta) |
+| RF05 | Gráficos automáticos | ✅ | Dashboard (evolução, distribuição, categorias), Resultados (por pergunta e alternativa) e Comparar |
 | RF06 | Relatório consolidado ao final | ✅ | Ver RN08 |
-| RF07 | Indicadores para os gestores | ✅ | Média geral, participação, pontos críticos e fortes, estatísticas por pergunta |
-| RF08 | Notificações de abertura e encerramento | ⚠️ Parcial | Aviso na tela inicial. Email exigiria um servidor SMTP |
+| RF07 | Indicadores para os gestores | ✅ | Média geral, participação, pontos críticos e fortes, média por categoria, estatísticas por pergunta, comparação entre ciclos |
+| RF08 | Notificações de abertura e encerramento | ✅ | Aviso na tela inicial + e-mails de abertura, encerramento e lembrete (SMTP; Mailpit no ambiente de teste) |
 | RF09 | Impedir múltiplas respostas | ✅ | Ver RN02 |
 | RF10 | Exportar relatórios em PDF | ✅ | Relatório para "Salvar como PDF" do navegador |
 | RF11 | Filtro por setor ou equipe | ❌ | Não implementado: conflita com RN05/RN07 (ver abaixo) |
 | RF12 | Logs de acesso dos gestores | ✅ | Entradas, saídas e tentativas recusadas (tela Relatórios) |
 | RNF01 | Responsivo | ✅ | Layout para celular, tablet e computador |
-| RNF02 | Interface simples | ✅ | Visual limpo em azul, com modo escuro |
+| RNF02 | Interface simples | ✅ | Visual limpo em azul, modo escuro, navegação por teclado, textos para leitores de tela e tela de agradecimento |
 | RNF03 | Usuários simultâneos | — | Depende do servidor; o envio é protegido contra concorrência |
 | RNF04 | Relatórios só para gestor autenticado | ✅ | Ver RN06 |
-| RNF05 | Criptografar dados sensíveis | ⚠️ Parcial | Senhas com hash bcrypt; criptografia do disco é configuração do servidor |
+| RNF05 | Criptografar dados sensíveis | ✅ | Senhas com hash bcrypt; comentários e relatórios com AES-256-GCM. Em produção, somar HTTPS |
 | RNF06 | Anonimato | ✅ | Ver "Como o anonimato funciona" |
 | RNF07 | Resposta em menos de 3 s | — | Depende do servidor; páginas leves, sem bibliotecas externas |
 | RNF08 | Disponibilidade de 99% | — | Depende da hospedagem; containers reiniciam sozinhos |
-| RNF09 | LGPD | ⚠️ Parcial | Coleta mínima, anonimato, senhas com hash. Termo de consentimento e política de privacidade ficam fora do código |
+| RNF09 | LGPD | ✅ | Coleta mínima, anonimato, termo de consentimento (aceite gravado com data e versão) e política de privacidade. A instituição precisa revisar a política e preencher os campos entre colchetes |
 | RNF10 | Backup diário | ✅ | Serviço `backup` no docker-compose |
 
 ## Conflitos entre requisitos e decisões tomadas
@@ -230,6 +289,8 @@ Cuidados extras (RN07), porque o gestor vê quem já respondeu:
 | `MINIMO_RESPOSTAS_ANONIMATO` | 3 | RN07 |
 | `DIAS_PESQUISA_ABERTA` | 7 | RN01 |
 | `DIAS_INTERVALO_PARTICIPACAO` | 21 | RN03 |
+| `VERSAO_TERMO` | 1 | RNF09: aumente quando mudar a política, para todos aceitarem o termo de novo |
+| `MAXIMO_OPCOES` | 10 | Alternativas por pergunta de múltipla escolha |
 
 Se mudar um valor, ajuste também os textos que citam o número em `index.php` e `script.js`.
 
@@ -239,14 +300,41 @@ Se mudar um valor, ajuste também os textos que citam o número em `index.php` e
 |---|---|---|
 | status_pesquisa | público | Aviso da tela inicial (aberta / encerrada) |
 | login, logout | todos | Login único; o perfil decide a tela |
+| aceitar_termo | funcionário | Grava o aceite do termo de consentimento (RNF09) |
 | formulario_ativo, enviar_resposta | funcionário | Carregar e responder a pesquisa |
 | funcionarios, criar_funcionario, editar_funcionario, alterar_status_funcionario, excluir_funcionario | gestor | Cadastro (RF01) |
-| formularios, criar_formulario, alterar_status_formulario | gestor | Formulários (RF02) |
-| dashboard, resultados, comentarios | gestor | Indicadores e análises |
+| importar_funcionarios, modelo_importacao | gestor | Importação por planilha e modelo para preencher |
+| formularios, detalhes_formulario, criar_formulario, editar_formulario, duplicar_formulario, excluir_formulario, alterar_status_formulario | gestor | Formulários (RF02) |
+| enviar_lembrete | gestor | Lembrete por e-mail para quem ainda não respondeu (RF08) |
+| dashboard, resultados, comparar, comentarios | gestor | Indicadores, análises e comparação entre ciclos |
 | exportar_excel, exportar_comentarios, logs_acesso | gestor | Exportações (Excel e TXT) e logs |
+
+## E-mails (RF08)
+
+| Quando | Para quem |
+|---|---|
+| Uma pesquisa abre | Funcionários ativos que podem responder (não respondem os que estão nos 21 dias da RN03) |
+| Uma pesquisa encerra | Todos os usuários ativos, avisando que o relatório foi gerado |
+| O gestor clica em "Enviar lembrete" | Quem ainda não respondeu (no máximo um lembrete a cada 10 minutos) |
+
+Cada aviso é enviado uma vez só (tabela `notificacoes`). O e-mail nunca diz nada sobre as respostas.
+No ambiente de teste, tudo cai no Mailpit (http://localhost:8025). Para usar o e-mail da escola,
+troque as variáveis do serviço `php` no `docker-compose.yml`:
+
+| Variável | Exemplo |
+|---|---|
+| `SMTP_HOST` / `SMTP_PORT` | `smtp.gmail.com` / `587` |
+| `SMTP_SEGURANCA` | `tls` (porta 587) ou `ssl` (porta 465) |
+| `SMTP_USUARIO` / `SMTP_SENHA` | conta e senha de aplicativo |
+| `SMTP_REMETENTE` / `SMTP_NOME` | `pesquisa@escola.com` / `Climatize` |
+| `APP_URL` | endereço público do sistema, usado no link dos e-mails |
+
+Sem `SMTP_HOST`, o sistema funciona normalmente e só não envia e-mails.
 
 ## Antes de usar de verdade
 
 - Remova o quadro "Credenciais de teste" da tela de login (`public/index.php`).
 - Troque as senhas do `docker-compose.yml` e as senhas dos usuários de teste.
 - Publique com HTTPS.
+- Revise a política de privacidade (`public/privacidade.php`) e preencha os campos entre colchetes.
+- Configure o SMTP da escola (seção "E-mails") e guarde uma cópia de `database/chave.key`.

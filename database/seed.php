@@ -1,7 +1,7 @@
 <?php
 // ============================================================
-// Prepara o banco: cria as tabelas que faltarem (a partir do schema.sql)
-// e cadastra os usuários e a pesquisa de exemplo.
+// Prepara o banco: cria as tabelas que faltarem, atualiza bancos de versões
+// anteriores (sem apagar nada) e cadastra os usuários e a pesquisa de exemplo.
 // Pode rodar quantas vezes quiser, não duplica nada.
 //
 // Uso: docker compose exec php php /var/www/database/seed.php
@@ -40,11 +40,58 @@ foreach ($comandos as $comando) {
 }
 echo "Tabelas conferidas.\n";
 
+// 3) atualiza bancos criados por versões anteriores do sistema
+$migracoes = [
+    "ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS termo_versao INT UNSIGNED NULL AFTER ativo",
+    "ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS termo_aceito_em DATETIME NULL AFTER termo_versao",
+    "ALTER TABLE perguntas ADD COLUMN IF NOT EXISTS tipo ENUM('nota', 'sim_nao', 'multipla') NOT NULL DEFAULT 'nota' AFTER texto",
+    "ALTER TABLE perguntas ADD COLUMN IF NOT EXISTS opcoes TEXT NULL AFTER tipo",
+    "ALTER TABLE perguntas ADD COLUMN IF NOT EXISTS categoria VARCHAR(60) NULL AFTER opcoes",
+    "ALTER TABLE resposta_itens MODIFY nota TINYINT UNSIGNED NULL",
+    "ALTER TABLE resposta_itens ADD COLUMN IF NOT EXISTS opcao TINYINT UNSIGNED NULL AFTER nota",
+];
+foreach ($migracoes as $comando) {
+    $pdo->exec($comando);
+}
+echo "Estrutura atualizada para a versão atual.\n";
+
 if ($pdo->query("SHOW TABLES LIKE 'gestores'")->fetch()) {
     echo "Aviso: a tabela antiga 'gestores' não é mais usada (os gestores agora ficam em 'funcionarios').\n";
 }
 
-// 3) usuários de teste (todos com a senha 123456)
+// 4) chave de criptografia e criptografia de comentários antigos (RNF05)
+chaveCriptografia();
+if (!getenv('APP_KEY')) {
+    echo "Chave de criptografia: " . caminhoChave() . " (guarde junto com os backups).\n";
+}
+$antigos = $pdo->query("SELECT id, comentario FROM respostas WHERE comentario IS NOT NULL AND comentario <> '' AND comentario NOT LIKE 'enc1:%'")->fetchAll();
+$stmt = $pdo->prepare("UPDATE respostas SET comentario = ? WHERE id = ?");
+foreach ($antigos as $r) {
+    $stmt->execute([criptografar($r['comentario']), $r['id']]);
+}
+$relatoriosAntigos = $pdo->query("SELECT id, dados_consolidados FROM relatorios WHERE dados_consolidados NOT LIKE 'enc1:%'")->fetchAll();
+$stmt = $pdo->prepare("UPDATE relatorios SET dados_consolidados = ? WHERE id = ?");
+foreach ($relatoriosAntigos as $r) {
+    $stmt->execute([criptografar($r['dados_consolidados']), $r['id']]);
+}
+if (count($antigos) + count($relatoriosAntigos) > 0) {
+    echo 'Criptografados: ' . count($antigos) . ' comentário(s) e ' . count($relatoriosAntigos) . " relatório(s) antigos.\n";
+}
+
+// 5) na primeira atualização, as pesquisas que já existiam são marcadas como notificadas,
+//    para não dispararem e-mails atrasados de abertura/encerramento
+if ((int)$pdo->query("SELECT COUNT(*) FROM notificacoes")->fetchColumn() === 0) {
+    $stmt = $pdo->prepare("INSERT IGNORE INTO notificacoes (formulario_id, tipo, chave, enviada_em) VALUES (?, ?, ?, NOW())");
+    foreach ($pdo->query("SELECT id, status, data_abertura FROM formularios WHERE data_abertura IS NOT NULL")->fetchAll() as $f) {
+        $ciclo = chaveCiclo($f);
+        $stmt->execute([$f['id'], 'abertura', 'abertura-' . $ciclo]);
+        if ($f['status'] === 'encerrado') {
+            $stmt->execute([$f['id'], 'encerramento', 'encerramento-' . $ciclo]);
+        }
+    }
+}
+
+// 6) usuários de teste (todos com a senha 123456)
 $senhaPadrao = '123456';
 $usuarios = [
     ['Gestor Teste', 'gestor@escola.com', 'gestor', 'Coordenação'],
@@ -58,26 +105,42 @@ foreach ($usuarios as [$nome, $email, $perfil, $cargo]) {
     echo "Usuário pronto: $email / $senhaPadrao ($perfil)\n";
 }
 
-// 4) pesquisa de exemplo com as 10 perguntas originais
+// 7) pesquisa de exemplo com as 10 perguntas originais (com categorias)
+//    e mais uma de sim/não e uma de múltipla escolha
 $titulo = 'Pesquisa de Clima Organizacional 2026';
+$perguntasExemplo = [
+    ['Como você avalia o ambiente de trabalho?', 'Ambiente'],
+    ['Você se sente valorizado pela gestão?', 'Liderança'],
+    ['Como avalia a comunicação entre as equipes?', 'Comunicação'],
+    ['Você tem os recursos necessários para realizar seu trabalho?', 'Recursos e infraestrutura'],
+    ['Como avalia as oportunidades de crescimento profissional?', 'Desenvolvimento'],
+    ['Você recomendaria a instituição como um bom lugar para trabalhar?', 'Engajamento'],
+    ['Como avalia o equilíbrio entre vida pessoal e trabalho?', 'Qualidade de vida'],
+    ['Você recebe feedback construtivo sobre seu desempenho?', 'Liderança'],
+    ['Como avalia a infraestrutura física do local de trabalho?', 'Recursos e infraestrutura'],
+    ['Você se sente parte de uma equipe unida?', 'Engajamento'],
+];
+
 $stmt = $pdo->prepare("SELECT id FROM formularios WHERE titulo = ?");
 $stmt->execute([$titulo]);
+$existente = $stmt->fetchColumn();
 
-if ($stmt->fetch()) {
+if ($existente) {
+    // bancos antigos: completa as categorias das perguntas de exemplo, se ainda estiverem vazias
+    $stmtCat = $pdo->prepare("UPDATE perguntas SET categoria = ? WHERE formulario_id = ? AND texto = ? AND (categoria IS NULL OR categoria = '')");
+    foreach ($perguntasExemplo as [$texto, $categoria]) {
+        $stmtCat->execute([$categoria, $existente, $texto]);
+    }
     echo "A pesquisa de exemplo já existe, nada a fazer.\n";
 } else {
-    $perguntas = [
-        'Como você avalia o ambiente de trabalho?',
-        'Você se sente valorizado pela gestão?',
-        'Como avalia a comunicação entre as equipes?',
-        'Você tem os recursos necessários para realizar seu trabalho?',
-        'Como avalia as oportunidades de crescimento profissional?',
-        'Você recomendaria a instituição como um bom lugar para trabalhar?',
-        'Como avalia o equilíbrio entre vida pessoal e trabalho?',
-        'Você recebe feedback construtivo sobre seu desempenho?',
-        'Como avalia a infraestrutura física do local de trabalho?',
-        'Você se sente parte de uma equipe unida?',
-    ];
+    $perguntas = [];
+    foreach ($perguntasExemplo as [$texto, $categoria]) {
+        $perguntas[] = ['texto' => $texto, 'tipo' => 'nota', 'categoria' => $categoria];
+    }
+    $perguntas[] = ['texto' => 'Você pretende continuar trabalhando na instituição no próximo ano?', 'tipo' => 'sim_nao', 'categoria' => 'Engajamento'];
+    $perguntas[] = ['texto' => 'Qual canal de comunicação interna você prefere?', 'tipo' => 'multipla', 'categoria' => 'Comunicação',
+        'opcoes' => ['E-mail', 'WhatsApp', 'Reuniões presenciais', 'Mural da escola']];
+    [$perguntas, $erro] = validarPerguntas($perguntas);
 
     $pdo->beginTransaction();
 
@@ -93,14 +156,14 @@ if ($stmt->fetch()) {
     $stmt = $pdo->prepare("INSERT INTO formularios (titulo, descricao, status, data_abertura, data_fechamento) VALUES (?, ?, 'ativo', ?, ?)");
     $stmt->execute([$titulo, 'Pesquisa inicial de clima organizacional', $abertura->format('Y-m-d H:i:s'), $fechamento->format('Y-m-d H:i:s')]);
     $formularioId = (int)$pdo->lastInsertId();
-
-    $stmtP = $pdo->prepare("INSERT INTO perguntas (formulario_id, texto, ordem) VALUES (?, ?, ?)");
-    foreach ($perguntas as $i => $texto) {
-        $stmtP->execute([$formularioId, $texto, $i + 1]);
-    }
+    salvarPerguntas($pdo, $formularioId, $perguntas);
     $pdo->commit();
 
     echo "Pesquisa de exemplo criada e ativa até " . $fechamento->format('d/m/Y H:i') . " (" . DIAS_PESQUISA_ABERTA . " dias).\n";
 }
 
-echo "\nPronto! Abra http://localhost:8080\n";
+echo "\nPronto! Abra http://localhost:8080";
+if (emailAtivo()) {
+    echo "  (e-mails de teste em http://localhost:8025)";
+}
+echo "\n";
