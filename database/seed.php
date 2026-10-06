@@ -49,6 +49,7 @@ $migracoes = [
     "ALTER TABLE perguntas ADD COLUMN IF NOT EXISTS categoria VARCHAR(60) NULL AFTER opcoes",
     "ALTER TABLE resposta_itens MODIFY nota TINYINT UNSIGNED NULL",
     "ALTER TABLE resposta_itens ADD COLUMN IF NOT EXISTS opcao TINYINT UNSIGNED NULL AFTER nota",
+    "ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS senha_alterada_em DATETIME NULL AFTER termo_aceito_em",
 ];
 foreach ($migracoes as $comando) {
     $pdo->exec($comando);
@@ -91,13 +92,50 @@ if ((int)$pdo->query("SELECT COUNT(*) FROM notificacoes")->fetchColumn() === 0) 
     }
 }
 
+// 5b) bancos criados quando o exemplo era de uma escola: os 4 usuários de teste passam
+//     de @escola.com para @empresa.com (o histórico de quem respondeu é mantido) e a
+//     pesquisa de exemplo ganha os textos de empresa. Só mexe no que o próprio seed criou.
+$renomear = [
+    ['gestor@escola.com', 'gestor@empresa.com', 'Coordenação', 'Gerência'],
+    ['funcionario1@escola.com', 'funcionario1@empresa.com', 'Professor', 'Analista'],
+    ['funcionario2@escola.com', 'funcionario2@empresa.com', 'Professor', 'Analista'],
+    ['funcionario3@escola.com', 'funcionario3@empresa.com', 'Secretaria', 'Administrativo'],
+];
+$existeEmail = $pdo->prepare("SELECT COUNT(*) FROM funcionarios WHERE email = ?");
+$trocaEmail = $pdo->prepare("UPDATE funcionarios SET email = ?, cargo = IF(cargo = ?, ?, cargo) WHERE email = ?");
+foreach ($renomear as [$antigo, $novo, $cargoAntigo, $cargoNovo]) {
+    $existeEmail->execute([$antigo]);
+    $temAntigo = (int)$existeEmail->fetchColumn() > 0;
+    $existeEmail->execute([$novo]);
+    $temNovo = (int)$existeEmail->fetchColumn() > 0;
+    if ($temAntigo && !$temNovo) {
+        $trocaEmail->execute([$novo, $cargoAntigo, $cargoNovo, $antigo]);
+        echo "Usuário de teste renomeado: $antigo -> $novo\n";
+    }
+}
+$idExemplo = $pdo->prepare("SELECT id FROM formularios WHERE titulo = 'Pesquisa de Clima Organizacional 2026'");
+$idExemplo->execute();
+$idExemplo = $idExemplo->fetchColumn();
+if ($idExemplo) {
+    $textos = [
+        'Você recomendaria a instituição como um bom lugar para trabalhar?' => 'Você recomendaria a empresa como um bom lugar para trabalhar?',
+        'Você pretende continuar trabalhando na instituição no próximo ano?' => 'Você pretende continuar trabalhando na empresa no próximo ano?',
+    ];
+    $trocaTexto = $pdo->prepare("UPDATE perguntas SET texto = ? WHERE formulario_id = ? AND texto = ?");
+    foreach ($textos as $antigo => $novo) {
+        $trocaTexto->execute([$novo, $idExemplo, $antigo]);
+    }
+    $pdo->prepare("UPDATE perguntas SET opcoes = REPLACE(opcoes, 'Mural da escola', 'Intranet') WHERE formulario_id = ? AND opcoes LIKE '%Mural da escola%'")
+        ->execute([$idExemplo]);
+}
+
 // 6) usuários de teste (todos com a senha 123456)
 $senhaPadrao = '123456';
 $usuarios = [
-    ['Gestor Teste', 'gestor@escola.com', 'gestor', 'Coordenação'],
-    ['Funcionário 1', 'funcionario1@escola.com', 'funcionario', 'Professor'],
-    ['Funcionário 2', 'funcionario2@escola.com', 'funcionario', 'Professor'],
-    ['Funcionário 3', 'funcionario3@escola.com', 'funcionario', 'Secretaria'],
+    ['Gestor Teste', 'gestor@empresa.com', 'gestor', 'Gerência'],
+    ['Funcionário 1', 'funcionario1@empresa.com', 'funcionario', 'Analista'],
+    ['Funcionário 2', 'funcionario2@empresa.com', 'funcionario', 'Analista'],
+    ['Funcionário 3', 'funcionario3@empresa.com', 'funcionario', 'Administrativo'],
 ];
 $stmt = $pdo->prepare("INSERT INTO funcionarios (nome, email, senha_hash, cargo, tipo_perfil) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE senha_hash = VALUES(senha_hash), tipo_perfil = VALUES(tipo_perfil), ativo = 1");
 foreach ($usuarios as [$nome, $email, $perfil, $cargo]) {
@@ -114,7 +152,7 @@ $perguntasExemplo = [
     ['Como avalia a comunicação entre as equipes?', 'Comunicação'],
     ['Você tem os recursos necessários para realizar seu trabalho?', 'Recursos e infraestrutura'],
     ['Como avalia as oportunidades de crescimento profissional?', 'Desenvolvimento'],
-    ['Você recomendaria a instituição como um bom lugar para trabalhar?', 'Engajamento'],
+    ['Você recomendaria a empresa como um bom lugar para trabalhar?', 'Engajamento'],
     ['Como avalia o equilíbrio entre vida pessoal e trabalho?', 'Qualidade de vida'],
     ['Você recebe feedback construtivo sobre seu desempenho?', 'Liderança'],
     ['Como avalia a infraestrutura física do local de trabalho?', 'Recursos e infraestrutura'],
@@ -137,9 +175,9 @@ if ($existente) {
     foreach ($perguntasExemplo as [$texto, $categoria]) {
         $perguntas[] = ['texto' => $texto, 'tipo' => 'nota', 'categoria' => $categoria];
     }
-    $perguntas[] = ['texto' => 'Você pretende continuar trabalhando na instituição no próximo ano?', 'tipo' => 'sim_nao', 'categoria' => 'Engajamento'];
+    $perguntas[] = ['texto' => 'Você pretende continuar trabalhando na empresa no próximo ano?', 'tipo' => 'sim_nao', 'categoria' => 'Engajamento'];
     $perguntas[] = ['texto' => 'Qual canal de comunicação interna você prefere?', 'tipo' => 'multipla', 'categoria' => 'Comunicação',
-        'opcoes' => ['E-mail', 'WhatsApp', 'Reuniões presenciais', 'Mural da escola']];
+        'opcoes' => ['E-mail', 'WhatsApp', 'Reuniões presenciais', 'Intranet']];
     [$perguntas, $erro] = validarPerguntas($perguntas);
 
     $pdo->beginTransaction();

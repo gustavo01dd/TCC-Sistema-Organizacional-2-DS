@@ -20,6 +20,8 @@ ligado pelo botão ☾ no topo das telas ou pelo item "Modo escuro" no menu do p
   descrição para leitores de tela, o foco fica sempre visível e as animações são desligadas para
   quem pediu "reduzir movimento" no sistema.
 - E-mails de aviso quando uma pesquisa abre, quando encerra e lembretes enviados pela gestão.
+- **Alterar senha** (botão no topo da pesquisa), com e-mail de confirmação depois da troca.
+- **Esqueci minha senha**: recebe por e-mail um link para criar uma senha nova, sem precisar pedir ao gestor.
 
 **Para os gestores**
 
@@ -32,9 +34,18 @@ ligado pelo botão ☾ no topo das telas ou pelo item "Modo escuro" no menu do p
   **editar rascunhos**, **duplicar** uma pesquisa para o próximo ciclo e excluir rascunhos.
 - Botão de **lembrete por e-mail** para quem ainda não respondeu.
 - Cadastro de funcionários na tela ou **importado por planilha** (.xlsx ou .csv), com modelo pronto para baixar.
+  O e-mail pode ser de qualquer provedor (Gmail, Hotmail, da empresa). A senha do cadastro é provisória:
+  a pessoa troca depois e a gestão não fica sabendo a senha nova.
 - Exportação para Excel com a aba **Respostas** e a aba **Resumo**, que tem fórmulas
   (médias, contagens e percentuais que se recalculam no Excel).
 - Comentários, relatório consolidado em PDF e logs de acesso.
+- **Alterar senha** pelo menu do painel.
+
+**Segurança do login**
+
+- Depois de **5 senhas erradas** no mesmo e-mail, o login dele fica bloqueado por **15 minutos**
+  (o "Esqueci minha senha" libera antes).
+- Trocar a senha derruba as sessões abertas com a senha antiga em outros aparelhos.
 
 ## Tecnologias
 
@@ -83,9 +94,10 @@ Tudo roda em containers Docker, com o Nginx como servidor web.
 
 - **PDO** (PHP): acesso ao banco com *prepared statements*, que protegem contra SQL injection.
 - **password_hash com bcrypt** (PHP): senhas guardadas só como hash.
+- **random_bytes e SHA-256** (PHP): códigos dos links de "Esqueci minha senha" e chaves do limite de tentativas, guardados só como hash.
 - **OpenSSL com AES-256-GCM** (PHP): comentários e relatórios guardados criptografados no banco (RNF05).
 - **SMTP** (protocolo de e-mail), implementado em PHP com `fsockopen`: envio dos e-mails de abertura,
-  encerramento e lembrete, com suporte a TLS e login para usar o servidor de e-mail da escola.
+  encerramento e lembrete, com suporte a TLS e login para usar o servidor de e-mail da empresa.
 - **Sessões PHP** com cookie HttpOnly e SameSite: controle de login.
 - **Fetch API** (JavaScript): comunicação com o back-end.
 - **SVG**: gráfico de evolução temporal.
@@ -122,6 +134,7 @@ o projeto mais complexo sem necessidade.
 │   ├── schema.sql                estrutura do banco
 │   ├── seed.php                  cria/atualiza as tabelas + dados de exemplo
 │   └── chave.key                 chave da criptografia (criada sozinha pelo seed, fora do git)
+├── .env.exemplo                  modelo para configurar um e-mail de verdade (Gmail)
 ├── public/
 │   ├── index.php                 todas as telas
 │   ├── style.css
@@ -153,13 +166,13 @@ O seed espera o banco ficar pronto sozinho e pode ser rodado quantas vezes quise
 
 ### Atualizando de uma versão anterior deste projeto
 
-Não precisa apagar o banco. Rode os mesmos dois comandos: o `--build` sobe o novo container do
-Mailpit e o seed acrescenta as colunas e tabelas novas, criptografa os comentários e relatórios que
-já existiam e completa a pesquisa de exemplo.
+Não precisa apagar o banco. Rode os mesmos dois comandos (ou o comando único abaixo): o `--build` sobe
+o novo container do Mailpit e o seed acrescenta as colunas e tabelas novas, criptografa os comentários e
+relatórios que já existiam, completa a pesquisa de exemplo e converte os usuários de teste antigos
+(`@escola.com`) para `@empresa.com`, mantendo o histórico de quem já respondeu.
 
 ```bash
-docker compose up -d --build
-docker compose exec php php /var/www/database/seed.php
+docker compose up -d --build && docker compose exec php php /var/www/database/seed.php
 ```
 
 Se preferir começar do zero (apaga os dados de teste antigos), use `docker compose down -v` antes.
@@ -175,10 +188,10 @@ Em produção, a chave também pode ser passada pela variável de ambiente `APP_
 
 | Email | Perfil | Vai para |
 |---|---|---|
-| gestor@escola.com | Gestor | Painel de gestão |
-| funcionario1@escola.com | Funcionário | Pesquisa |
-| funcionario2@escola.com | Funcionário | Pesquisa |
-| funcionario3@escola.com | Funcionário | Pesquisa |
+| gestor@empresa.com | Gestor | Painel de gestão |
+| funcionario1@empresa.com | Funcionário | Pesquisa |
+| funcionario2@empresa.com | Funcionário | Pesquisa |
+| funcionario3@empresa.com | Funcionário | Pesquisa |
 
 - A pesquisa de exemplo fica aberta por **7 dias** (RN01). Depois disso ela é encerrada sozinha
   e o relatório consolidado é gerado. Para testar de novo, crie e ative outro formulário no painel.
@@ -188,7 +201,10 @@ Em produção, a chave também pode ser passada pela variável de ambiente `APP_
 - No primeiro acesso, cada funcionário precisa **aceitar o termo de consentimento** antes de responder.
 - A pesquisa de exemplo tem 10 perguntas de nota, 1 de sim/não e 1 de múltipla escolha, divididas em categorias.
 - Para testar a importação, baixe o modelo na tela Funcionários, preencha e envie. A linha de exemplo
-  (`maria.exemplo@escola.com`) é ignorada.
+  (`maria.exemplo@empresa.com`) é ignorada.
+- Rodar o seed de novo volta a senha dos 4 usuários de teste para `123456` (útil se você trocar e esquecer).
+- Para testar o "Esqueci minha senha": na tela de login, clique no link, informe o e-mail e abra o
+  link do e-mail que chega no Mailpit (http://localhost:8025).
 
 ## Dados e backup (RNF10)
 
@@ -248,7 +264,7 @@ Cuidados extras (RN07), porque o gestor vê quem já respondeu:
 | RF01 | Cadastro de funcionários e gestores | ✅ | Tela Funcionários: criar, editar, desativar, excluir |
 | RF02 | Criação de formulários | ✅ | Tela Formulários: editor com 3 tipos de pergunta e categorias, editar rascunho, duplicar |
 | RF03 | Coleta anônima | ✅ | Ver RN05 |
-| RF04 | Armazenamento seguro | ✅ | PDO com prepared statements, senhas com hash, cookie de sessão protegido |
+| RF04 | Armazenamento seguro | ✅ | PDO com prepared statements, senhas com hash, cookie de sessão protegido, limite de tentativas de login, sessões derrubadas quando a senha muda |
 | RF05 | Gráficos automáticos | ✅ | Dashboard (evolução, distribuição, categorias), Resultados (por pergunta e alternativa) e Comparar |
 | RF06 | Relatório consolidado ao final | ✅ | Ver RN08 |
 | RF07 | Indicadores para os gestores | ✅ | Média geral, participação, pontos críticos e fortes, média por categoria, estatísticas por pergunta, comparação entre ciclos |
@@ -265,7 +281,7 @@ Cuidados extras (RN07), porque o gestor vê quem já respondeu:
 | RNF06 | Anonimato | ✅ | Ver "Como o anonimato funciona" |
 | RNF07 | Resposta em menos de 3 s | — | Depende do servidor; páginas leves, sem bibliotecas externas |
 | RNF08 | Disponibilidade de 99% | — | Depende da hospedagem; containers reiniciam sozinhos |
-| RNF09 | LGPD | ✅ | Coleta mínima, anonimato, termo de consentimento (aceite gravado com data e versão) e política de privacidade. A instituição precisa revisar a política e preencher os campos entre colchetes |
+| RNF09 | LGPD | ✅ | Coleta mínima, anonimato, termo de consentimento (aceite gravado com data e versão) e política de privacidade. A empresa precisa revisar a política e preencher os campos entre colchetes |
 | RNF10 | Backup diário | ✅ | Serviço `backup` no docker-compose |
 
 ## Conflitos entre requisitos e decisões tomadas
@@ -291,6 +307,11 @@ Cuidados extras (RN07), porque o gestor vê quem já respondeu:
 | `DIAS_INTERVALO_PARTICIPACAO` | 21 | RN03 |
 | `VERSAO_TERMO` | 1 | RNF09: aumente quando mudar a política, para todos aceitarem o termo de novo |
 | `MAXIMO_OPCOES` | 10 | Alternativas por pergunta de múltipla escolha |
+| `TAMANHO_MINIMO_SENHA` | 6 | Tamanho mínimo das senhas |
+| `MAX_TENTATIVAS_LOGIN` / `MINUTOS_BLOQUEIO_LOGIN` | 5 / 15 | Senhas erradas antes do bloqueio e duração dele |
+| `MAX_TENTATIVAS_POR_IP` | 100 | Senhas erradas por IP em 15 minutos (contra robôs; alto porque a empresa toda pode sair pelo mesmo IP) |
+| `MINUTOS_VALIDADE_LINK_SENHA` | 60 | Validade do link de "Esqueci minha senha" |
+| `MAX_PEDIDOS_REDEFINICAO_HORA` | 3 | Links de redefinição por conta a cada hora |
 
 Se mudar um valor, ajuste também os textos que citam o número em `index.php` e `script.js`.
 
@@ -300,6 +321,8 @@ Se mudar um valor, ajuste também os textos que citam o número em `index.php` e
 |---|---|---|
 | status_pesquisa | público | Aviso da tela inicial (aberta / encerrada) |
 | login, logout | todos | Login único; o perfil decide a tela |
+| alterar_senha | logado | Troca a própria senha (pede a atual) e manda e-mail de confirmação |
+| solicitar_redefinicao, verificar_redefinicao, redefinir_senha | público | "Esqueci minha senha": link por e-mail, conferência do link e nova senha |
 | aceitar_termo | funcionário | Grava o aceite do termo de consentimento (RNF09) |
 | formulario_ativo, enviar_resposta | funcionário | Carregar e responder a pesquisa |
 | funcionarios, criar_funcionario, editar_funcionario, alterar_status_funcionario, excluir_funcionario | gestor | Cadastro (RF01) |
@@ -316,18 +339,51 @@ Se mudar um valor, ajuste também os textos que citam o número em `index.php` e
 | Uma pesquisa abre | Funcionários ativos que podem responder (não respondem os que estão nos 21 dias da RN03) |
 | Uma pesquisa encerra | Todos os usuários ativos, avisando que o relatório foi gerado |
 | O gestor clica em "Enviar lembrete" | Quem ainda não respondeu (no máximo um lembrete a cada 10 minutos) |
+| Alguém pede "Esqueci minha senha" | A própria pessoa, com o link para criar a senha nova |
+| A senha muda (pela pessoa, pelo link ou pelo gestor) | A própria pessoa, confirmando a troca. **Nunca leva a senha** |
 
 Cada aviso é enviado uma vez só (tabela `notificacoes`). O e-mail nunca diz nada sobre as respostas.
-No ambiente de teste, tudo cai no Mailpit (http://localhost:8025). Para usar o e-mail da escola,
-troque as variáveis do serviço `php` no `docker-compose.yml`:
+No ambiente de teste, tudo cai no Mailpit (http://localhost:8025).
 
-| Variável | Exemplo |
+**Remetentes:** todos os e-mails saem de um remetente institucional (padrão "Pesquisa de Clima - RH").
+Nos lembretes, o campo **"Responder para"** leva o e-mail do gestor que clicou no botão (ou o de
+`EMAIL_GESTOR_LEMBRETES`, se preenchido): quem tiver dúvida responde e fala direto com a gestão.
+Assim é preciso configurar uma conta de e-mail só, e o lembrete não chega com cara de cobrança do chefe,
+o que poderia inibir respostas sinceras.
+
+### Trocando o Mailpit por um e-mail de verdade (Gmail)
+
+Não precisa mexer no código nem no `docker-compose.yml`:
+
+1. Use uma conta Gmail só para o sistema (ex.: `rh.climatize@gmail.com`) e ative a
+   **verificação em duas etapas** nela.
+2. Crie uma **senha de app** em https://myaccount.google.com/apppasswords (16 letras).
+   A senha normal da conta não funciona.
+3. Na pasta do projeto, copie `.env.exemplo` para um arquivo chamado `.env` e preencha
+   o e-mail, a senha de app e o `APP_URL`.
+4. Rode `docker compose up -d` para o PHP pegar as novas configurações.
+5. Cadastre os funcionários com os e-mails reais deles.
+
+| Variável | Gmail |
 |---|---|
 | `SMTP_HOST` / `SMTP_PORT` | `smtp.gmail.com` / `587` |
 | `SMTP_SEGURANCA` | `tls` (porta 587) ou `ssl` (porta 465) |
-| `SMTP_USUARIO` / `SMTP_SENHA` | conta e senha de aplicativo |
-| `SMTP_REMETENTE` / `SMTP_NOME` | `pesquisa@escola.com` / `Climatize` |
-| `APP_URL` | endereço público do sistema, usado no link dos e-mails |
+| `SMTP_USUARIO` / `SMTP_SENHA` | o Gmail da conta e a senha de app |
+| `SMTP_REMETENTE` / `SMTP_NOME` | o mesmo Gmail / `Pesquisa de Clima - RH` |
+| `EMAIL_GESTOR_LEMBRETES` | "Responder para" dos lembretes (vazio = e-mail do gestor que enviou) |
+| `APP_URL` | endereço que vai no link dos e-mails |
+
+Cuidados:
+
+- **O link do e-mail** (lembretes e "Esqueci minha senha"). `http://localhost:8080` só abre no computador onde o Docker está rodando.
+  Para quem recebe o e-mail conseguir entrar, o `APP_URL` precisa ser o IP do computador na rede
+  da empresa (ex.: `http://192.168.0.10:8080`, com o celular ou PC na mesma rede) ou o endereço do
+  servidor onde o sistema estiver publicado.
+- O `.env` já está no `.gitignore`: a senha de app não vai para o GitHub.
+- Uma conta Gmail comum envia até 500 e-mails por dia. Os primeiros podem cair no spam.
+- Contas corporativas (Google Workspace) podem ter a senha de app bloqueada pelo administrador.
+- Se o e-mail não chegar, `docker compose logs php` mostra o motivo (por exemplo, login recusado).
+  Para voltar ao Mailpit, apague o `.env` e rode `docker compose up -d`.
 
 Sem `SMTP_HOST`, o sistema funciona normalmente e só não envia e-mails.
 
@@ -337,4 +393,4 @@ Sem `SMTP_HOST`, o sistema funciona normalmente e só não envia e-mails.
 - Troque as senhas do `docker-compose.yml` e as senhas dos usuários de teste.
 - Publique com HTTPS.
 - Revise a política de privacidade (`public/privacidade.php`) e preencha os campos entre colchetes.
-- Configure o SMTP da escola (seção "E-mails") e guarde uma cópia de `database/chave.key`.
+- Configure o e-mail de verdade (seção "Trocando o Mailpit por um e-mail de verdade") e guarde uma cópia de `database/chave.key`.

@@ -31,12 +31,12 @@
             <h1>Política de Privacidade</h1>
             <p class="politica-aviso">
                 Modelo de política para a Pesquisa de Clima Organizacional. Antes de usar o sistema,
-                a direção da instituição deve revisar este texto e preencher os campos entre colchetes.
+                a diretoria da empresa deve revisar este texto e preencher os campos entre colchetes.
             </p>
             <p class="politica-meta">Última atualização: [dd/mm/aaaa] · Versão do termo de consentimento: <?= VERSAO_TERMO ?></p>
 
             <h2>1. Quem é o responsável pelos dados</h2>
-            <p>A <b>[nome da instituição]</b>, inscrita no CNPJ [número], é a controladora dos dados tratados neste sistema,
+            <p>A <b>[razão social da empresa]</b>, inscrita no CNPJ [número], é a controladora dos dados tratados neste sistema,
                 nos termos da Lei Geral de Proteção de Dados Pessoais (LGPD, Lei nº 13.709/2018).
                 Encarregado pelo tratamento de dados: [nome], e-mail [email do encarregado].</p>
 
@@ -46,7 +46,9 @@
                 <li><b>Participação</b>: somente a data em que você respondeu cada pesquisa, para impedir respostas duplicadas e respeitar o intervalo de 21 dias entre participações.</li>
                 <li><b>Respostas</b>: notas, alternativas escolhidas e comentário. São gravados <b>sem nenhuma ligação</b> com seu nome, e-mail ou cadastro.</li>
                 <li><b>Aceite do termo</b>: a data em que você aceitou este termo.</li>
-                <li><b>Acessos dos gestores</b>: data e hora de entradas, saídas e tentativas de login recusadas no painel de gestão.</li>
+                <li><b>Acessos dos gestores</b>: data e hora de entradas, saídas, tentativas de login recusadas e trocas de senha no painel de gestão.</li>
+                <li><b>Segurança do login</b>: quando alguém erra a senha ou pede "Esqueci minha senha", o sistema guarda por até 1 dia um registro cifrado (<i>hash</i>) do email e do endereço IP, só para bloquear quem tenta adivinhar senhas.</li>
+                <li><b>Redefinição de senha</b>: o código do link enviado por email é guardado apenas como <i>hash</i>, vale por <?= MINUTOS_VALIDADE_LINK_SENHA ?> minutos e só pode ser usado uma vez.</li>
             </ul>
 
             <h2>3. Para que os dados são usados</h2>
@@ -54,6 +56,7 @@
                 <li>Medir o clima organizacional e orientar ações de melhoria.</li>
                 <li>Controlar quem já participou de cada pesquisa.</li>
                 <li>Enviar e-mails sobre a abertura, o encerramento e lembretes das pesquisas.</li>
+                <li>Enviar o link de "Esqueci minha senha" e avisar quando a sua senha for alterada.</li>
                 <li>Manter a segurança do sistema.</li>
             </ul>
 
@@ -68,10 +71,10 @@
 
             <h2>5. Compartilhamento</h2>
             <p>Os dados não são compartilhados com terceiros. Resultados agregados, que não identificam ninguém,
-                podem ser apresentados à comunidade da instituição.</p>
+                podem ser apresentados aos colaboradores da empresa.</p>
 
             <h2>6. Por quanto tempo os dados são guardados</h2>
-            <p>Os dados de cadastro são mantidos enquanto houver vínculo com a instituição [ajuste conforme a política da instituição].
+            <p>Os dados de cadastro são mantidos enquanto houver vínculo com a empresa [ajuste conforme a política da empresa].
                 As respostas anônimas podem ser mantidas para comparação entre ciclos de pesquisa, pois não identificam ninguém (LGPD, art. 12).
                 As cópias de segurança diárias são mantidas por 7 dias.</p>
 
@@ -81,8 +84,9 @@
                 Como as respostas são anônimas, não é possível localizar, alterar ou excluir as respostas de uma pessoa específica.</p>
 
             <h2>8. Segurança</h2>
-            <p>Senhas protegidas com <i>hash</i>, comentários e relatórios criptografados, acesso aos resultados restrito a gestores
-                autenticados, registro dos acessos dos gestores e cópia de segurança diária.</p>
+            <p>Senhas protegidas com <i>hash</i> e conhecidas só por você (a senha do cadastro é provisória e pode ser trocada a qualquer momento),
+                bloqueio temporário depois de várias senhas erradas, aviso por email sempre que a senha muda, comentários e relatórios criptografados,
+                acesso aos resultados restrito a gestores autenticados, registro dos acessos dos gestores e cópia de segurança diária.</p>
 
             <h2>9. Contato</h2>
             <p>Dúvidas ou solicitações: [email do encarregado].</p>

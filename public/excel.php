@@ -477,7 +477,7 @@ function gerarPlanilhaRespostas($titulo, $subtitulo, array $perguntas, array $li
 // Planilha-modelo para importar funcionários
 // ------------------------------------------------------------
 
-const EMAIL_EXEMPLO_IMPORTACAO = 'maria.exemplo@escola.com';
+const EMAIL_EXEMPLO_IMPORTACAO = 'maria.exemplo@empresa.com';
 
 function gerarModeloImportacao() {
     $p = new PlanilhaXlsx();
@@ -491,7 +491,7 @@ function gerarModeloImportacao() {
         $celulas .= $p->celTexto(excelColuna($i + 1) . '4', XL_CABECALHO, $c);
     }
     $xml .= '<row r="4" ht="24" customHeight="1">' . $celulas . '</row>';
-    $exemplo = ['Maria Exemplo', EMAIL_EXEMPLO_IMPORTACAO, 'trocar123', 'Professora', '10/02/2025', 'funcionario'];
+    $exemplo = ['Maria Exemplo', EMAIL_EXEMPLO_IMPORTACAO, 'trocar123', 'Analista', '10/02/2025', 'funcionario'];
     $celulas = '';
     foreach ($exemplo as $i => $v) {
         $celulas .= $p->celTexto(excelColuna($i + 1) . '5', XL_TEXTO_Z, $v);

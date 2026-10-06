@@ -22,6 +22,21 @@ const VERSAO_TERMO = 1;
 const TIPOS_PERGUNTA = ['nota', 'sim_nao', 'multipla'];
 const MAXIMO_OPCOES = 10;
 
+// senhas: tamanho mínimo e máximo (o bcrypt só considera os primeiros 72 bytes)
+const TAMANHO_MINIMO_SENHA = 6;
+const TAMANHO_MAXIMO_SENHA = 72;
+
+// Limite de tentativas de login: depois de 5 senhas erradas para o mesmo email,
+// o login desse email fica bloqueado por 15 minutos. O limite por IP pega robôs
+// que testam muitos emails, e é alto porque a empresa inteira pode sair pelo mesmo IP.
+const MAX_TENTATIVAS_LOGIN = 5;
+const MINUTOS_BLOQUEIO_LOGIN = 15;
+const MAX_TENTATIVAS_POR_IP = 100;
+
+// "Esqueci minha senha": validade do link e pedidos por conta a cada hora
+const MINUTOS_VALIDADE_LINK_SENHA = 60;
+const MAX_PEDIDOS_REDEFINICAO_HORA = 3;
+
 
 // ---------- usuário logado ----------
 
@@ -31,13 +46,24 @@ function usuarioLogado($pdo) {
     if (empty($_SESSION['usuario_id'])) {
         return null;
     }
-    $stmt = $pdo->prepare("SELECT id, nome, email, tipo_perfil, ativo, termo_versao FROM funcionarios WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, nome, email, tipo_perfil, ativo, termo_versao, senha_alterada_em FROM funcionarios WHERE id = ?");
     $stmt->execute([$_SESSION['usuario_id']]);
     $usuario = $stmt->fetch();
     if (!$usuario || !$usuario['ativo']) {
         return null;
     }
+    // se a senha mudou depois deste login (em outro aparelho, pelo link do email ou
+    // pelo gestor), esta sessão deixa de valer: quem estava usando a senha antiga sai
+    if ((string)$usuario['senha_alterada_em'] !== (string)($_SESSION['senha_marca'] ?? '')) {
+        return null;
+    }
     return $usuario;
+}
+
+// guarda na sessão a "marca" da senha atual (ver usuarioLogado)
+function marcarSessao($usuarioId, $senhaAlteradaEm) {
+    $_SESSION['usuario_id'] = (int)$usuarioId;
+    $_SESSION['senha_marca'] = (string)$senhaAlteradaEm;
 }
 
 // RNF09: o funcionário precisa aceitar o termo antes de responder
@@ -105,8 +131,11 @@ function validarCadastro($dados, $senhaObrigatoria) {
     if (tamanhoTexto($nome) > 100 || tamanhoTexto($email) > 100 || tamanhoTexto($cargo) > 50) {
         return [null, 'Texto muito longo (nome e email até 100 caracteres, cargo até 50)'];
     }
-    if (($senhaObrigatoria || $senha !== '') && strlen($senha) < 6) {
-        return [null, 'A senha precisa ter pelo menos 6 caracteres'];
+    if ($senhaObrigatoria || $senha !== '') {
+        $erroSenha = validarSenhaNova($senha);
+        if ($erroSenha) {
+            return [null, $erroSenha];
+        }
     }
     if (!in_array($perfil, ['funcionario', 'gestor'], true)) {
         return [null, 'Perfil inválido'];
@@ -123,6 +152,16 @@ function validarCadastro($dados, $senhaObrigatoria) {
         'data_admissao' => $dataAdmissao !== '' ? $dataAdmissao : null,
         'perfil' => $perfil,
     ], null];
+}
+
+function validarSenhaNova($senha) {
+    if (strlen($senha) < TAMANHO_MINIMO_SENHA) {
+        return 'A senha precisa ter pelo menos ' . TAMANHO_MINIMO_SENHA . ' caracteres';
+    }
+    if (strlen($senha) > TAMANHO_MAXIMO_SENHA) {
+        return 'A senha pode ter no máximo ' . TAMANHO_MAXIMO_SENHA . ' caracteres';
+    }
+    return null;
 }
 
 // senha provisória para cadastros importados sem senha (sem letras parecidas, como l, 1, O e 0)
@@ -624,8 +663,8 @@ function configuracaoSmtp() {
         'usuario' => getenv('SMTP_USUARIO') ?: '',
         'senha' => getenv('SMTP_SENHA') ?: '',
         'seguranca' => strtolower(getenv('SMTP_SEGURANCA') ?: ''),   // '', 'tls' (STARTTLS) ou 'ssl'
-        'remetente' => getenv('SMTP_REMETENTE') ?: 'climatize@escola.local',
-        'nome' => getenv('SMTP_NOME') ?: 'Climatize',
+        'remetente' => getenv('SMTP_REMETENTE') ?: 'rh@empresa.local',   // remetente institucional (RH)
+        'nome' => getenv('SMTP_NOME') ?: 'Pesquisa de Clima - RH',
     ];
 }
 
@@ -648,11 +687,13 @@ function smtpLer($conexao) {
     return [(int)substr($resposta, 0, 3), $resposta];
 }
 
-function smtpComando($conexao, $comando, array $codigosEsperados) {
+// $rotulo: nome do comando que aparece no log de erro (usado no login, para
+// o usuário e a senha nunca irem parar no log)
+function smtpComando($conexao, $comando, array $codigosEsperados, $rotulo = null) {
     fwrite($conexao, $comando . "\r\n");
     [$codigo, $texto] = smtpLer($conexao);
     if (!in_array($codigo, $codigosEsperados, true)) {
-        throw new RuntimeException('SMTP recusou "' . strtok($comando, ' ') . '": ' . trim($texto));
+        throw new RuntimeException('SMTP recusou "' . ($rotulo ?? strtok($comando, ' ')) . '": ' . trim($texto));
     }
     return $texto;
 }
@@ -693,15 +734,19 @@ function enviarEmails(array $mensagens) {
         smtpComando($conexao, "EHLO $dominio", [250]);
         if ($cfg['seguranca'] === 'tls') {
             smtpComando($conexao, 'STARTTLS', [220]);
-            if (!stream_socket_enable_crypto($conexao, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
-                throw new RuntimeException('Falha ao iniciar TLS');
+            if (!@stream_socket_enable_crypto($conexao, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+                throw new RuntimeException('SMTP: falha ao iniciar TLS (confira SMTP_HOST e SMTP_PORT, e se o container tem os certificados atualizados)');
             }
             smtpComando($conexao, "EHLO $dominio", [250]);
         }
         if ($cfg['usuario'] !== '') {
-            smtpComando($conexao, 'AUTH LOGIN', [334]);
-            smtpComando($conexao, base64_encode($cfg['usuario']), [334]);
-            smtpComando($conexao, base64_encode($cfg['senha']), [235]);
+            try {
+                smtpComando($conexao, 'AUTH LOGIN', [334]);
+                smtpComando($conexao, base64_encode($cfg['usuario']), [334], 'usuário');
+                smtpComando($conexao, base64_encode($cfg['senha']), [235], 'senha');
+            } catch (RuntimeException $e) {
+                throw new RuntimeException($e->getMessage() . ' | Login no SMTP recusado: confira SMTP_USUARIO e SMTP_SENHA (no Gmail, use uma senha de app).');
+            }
         }
     } catch (RuntimeException $e) {
         error_log($e->getMessage());
@@ -725,11 +770,17 @@ function enviarEmails(array $mensagens) {
                 'From: ' . cabecalhoCodificado($cfg['nome']) . " <{$cfg['remetente']}>",
                 'To: ' . cabecalhoCodificado($m['nome'] ?? '') . " <$para>",
                 'Subject: ' . cabecalhoCodificado($m['assunto']),
+            ];
+            // "Responder para": nos lembretes, a resposta vai para o gestor
+            if (!empty($m['responder_para']) && filter_var($m['responder_para'], FILTER_VALIDATE_EMAIL)) {
+                $cabecalhos[] = 'Reply-To: ' . cabecalhoCodificado($m['responder_nome'] ?? '') . " <{$m['responder_para']}>";
+            }
+            $cabecalhos = array_merge($cabecalhos, [
                 'Message-ID: <' . bin2hex(random_bytes(12)) . '@' . (explode('@', $cfg['remetente'])[1] ?? 'localhost') . '>',
                 'MIME-Version: 1.0',
                 'Content-Type: text/plain; charset=UTF-8',
                 'Content-Transfer-Encoding: base64',
-            ];
+            ]);
             // o corpo em base64 não tem linhas começando com ponto, então dispensa "dot-stuffing"
             fwrite($conexao, implode("\r\n", $cabecalhos) . "\r\n\r\n" . rtrim(chunk_split(base64_encode($m['texto']), 76, "\r\n")) . "\r\n.\r\n");
             [$codigo, $texto] = smtpLer($conexao);
@@ -847,8 +898,10 @@ function processarNotificacoes($pdo) {
     }
 }
 
-// Lembrete enviado pelo gestor para quem ainda não respondeu
-function enviarLembrete($pdo, $formularioId) {
+// Lembrete enviado pelo gestor para quem ainda não respondeu.
+// Sai do remetente institucional (RH), com "Responder para" o gestor:
+// quem tiver dúvida responde o email e fala com a gestão.
+function enviarLembrete($pdo, $formularioId, $gestor = null) {
     $stmt = $pdo->prepare("SELECT id, titulo, data_abertura, data_fechamento FROM formularios WHERE id = ? AND status = 'ativo' AND data_abertura <= NOW() AND (data_fechamento IS NULL OR data_fechamento > NOW())");
     $stmt->execute([$formularioId]);
     $formulario = $stmt->fetch();
@@ -869,9 +922,145 @@ function enviarLembrete($pdo, $formularioId) {
 
     $chave = 'lembrete-' . $formularioId . '-' . date('YmdHis') . '-' . bin2hex(random_bytes(3));
     reservarNotificacao($pdo, $formularioId, 'lembrete', $chave);
-    $resultado = enviarEmails(array_map(fn($f) => mensagemAbertura($f, $formulario, true), $destinatarios));
+    $responderPara = getenv('EMAIL_GESTOR_LEMBRETES') ?: ($gestor['email'] ?? '');
+    $responderNome = getenv('EMAIL_GESTOR_LEMBRETES') ? 'Gestão' : ($gestor['nome'] ?? 'Gestão');
+    $mensagens = array_map(function ($f) use ($formulario, $responderPara, $responderNome) {
+        $m = mensagemAbertura($f, $formulario, true);
+        if ($responderPara !== '') {
+            $m['responder_para'] = $responderPara;
+            $m['responder_nome'] = $responderNome;
+            $m['texto'] = str_replace("\n\nEquipe Climatize", "\n\nDúvidas? É só responder este email para falar com a gestão.\n\nEquipe Climatize", $m['texto']);
+        }
+        return $m;
+    }, $destinatarios);
+    $resultado = enviarEmails($mensagens);
     registrarEnvio($pdo, $chave, $resultado);
     return [$resultado, null];
+}
+
+
+// ---------- limite de tentativas (login e redefinição de senha) ----------
+
+function ipCliente() {
+    return (string)($_SERVER['REMOTE_ADDR'] ?? 'desconhecido');
+}
+
+// a chave é um hash: a tabela não guarda o email nem o IP de forma legível
+function chaveTentativa($tipo, $valor) {
+    $valor = function_exists('mb_strtolower') ? mb_strtolower(trim((string)$valor)) : strtolower(trim((string)$valor));
+    return hash('sha256', $tipo . '|' . $valor);
+}
+
+function registrarTentativa($pdo, $chave) {
+    $stmt = $pdo->prepare("INSERT INTO tentativas (chave, criada_em) VALUES (?, NOW())");
+    $stmt->execute([$chave]);
+    // limpeza: registros com mais de 1 dia não servem para nada
+    if (random_int(1, 20) === 1) {
+        $pdo->exec("DELETE FROM tentativas WHERE criada_em < DATE_SUB(NOW(), INTERVAL 1 DAY)");
+    }
+}
+
+function contarTentativas($pdo, $chave, $minutos) {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM tentativas WHERE chave = ? AND criada_em >= DATE_SUB(NOW(), INTERVAL ? MINUTE)");
+    $stmt->execute([$chave, (int)$minutos]);
+    return (int)$stmt->fetchColumn();
+}
+
+function limparTentativas($pdo, $chave) {
+    $stmt = $pdo->prepare("DELETE FROM tentativas WHERE chave = ?");
+    $stmt->execute([$chave]);
+}
+
+// null = liberado. Número = minutos que faltam para liberar.
+function minutosDeBloqueio($pdo, $chave, $limite, $minutos) {
+    $stmt = $pdo->prepare("SELECT COUNT(*) AS total, TIMESTAMPDIFF(SECOND, NOW(), DATE_ADD(MIN(criada_em), INTERVAL ? MINUTE)) AS segundos
+                           FROM tentativas WHERE chave = ? AND criada_em >= DATE_SUB(NOW(), INTERVAL ? MINUTE)");
+    $stmt->execute([(int)$minutos, $chave, (int)$minutos]);
+    $linha = $stmt->fetch();
+    if ((int)$linha['total'] < $limite) {
+        return null;
+    }
+    return max(1, (int)ceil(((int)$linha['segundos']) / 60));
+}
+
+
+// ---------- troca e redefinição de senha ----------
+
+// Grava a nova senha, invalida os links de redefinição pendentes e muda a
+// "marca" da senha (derruba as sessões abertas com a senha antiga).
+// Retorna a nova marca, para manter logado quem acabou de trocar.
+function definirSenha($pdo, $usuarioId, $novaSenha) {
+    $stmt = $pdo->prepare("UPDATE funcionarios SET senha_hash = ?, senha_alterada_em = NOW() WHERE id = ?");
+    $stmt->execute([password_hash($novaSenha, PASSWORD_DEFAULT), $usuarioId]);
+    $stmt = $pdo->prepare("UPDATE redefinicoes_senha SET usado_em = NOW() WHERE funcionario_id = ? AND usado_em IS NULL");
+    $stmt->execute([$usuarioId]);
+    $stmt = $pdo->prepare("SELECT senha_alterada_em FROM funcionarios WHERE id = ?");
+    $stmt->execute([$usuarioId]);
+    return (string)$stmt->fetchColumn();
+}
+
+// Cria um link de "Esqueci minha senha". O código vai só no email;
+// no banco fica apenas o hash dele.
+function criarLinkRedefinicao($pdo, $usuarioId) {
+    $token = bin2hex(random_bytes(32));
+    $stmt = $pdo->prepare("INSERT INTO redefinicoes_senha (funcionario_id, token_hash, criado_em, expira_em) VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL ? MINUTE))");
+    $stmt->execute([$usuarioId, hash('sha256', $token), MINUTOS_VALIDADE_LINK_SENHA]);
+    return enderecoSistema() . '/?redefinir=' . $token;
+}
+
+// Link válido = existe, não foi usado, não venceu e a conta está ativa
+function buscarRedefinicaoValida($pdo, $token) {
+    $token = (string)$token;
+    if (strlen($token) !== 64 || !ctype_xdigit($token)) {
+        return null;
+    }
+    $stmt = $pdo->prepare("SELECT r.id, f.id AS funcionario_id, f.nome, f.email, f.tipo_perfil
+                           FROM redefinicoes_senha r JOIN funcionarios f ON f.id = r.funcionario_id
+                           WHERE r.token_hash = ? AND r.usado_em IS NULL AND r.expira_em > NOW() AND f.ativo = 1");
+    $stmt->execute([hash('sha256', strtolower($token))]);
+    return $stmt->fetch() ?: null;
+}
+
+function mensagemLinkRedefinicao($usuario, $link) {
+    $texto = "Olá, {$usuario['nome']}!\n\n"
+        . "Recebemos um pedido para redefinir a senha da sua conta na Pesquisa de Clima Organizacional.\n\n"
+        . "Para criar uma nova senha, abra o link abaixo. Ele vale por " . MINUTOS_VALIDADE_LINK_SENHA . " minutos e só pode ser usado uma vez:\n\n"
+        . "$link\n\n"
+        . "Se você não pediu a troca, ignore este email: sua senha continua a mesma.\n\n"
+        . "Equipe Climatize";
+    return ['para' => $usuario['email'], 'nome' => $usuario['nome'], 'assunto' => 'Redefinição de senha - Pesquisa de Clima', 'texto' => $texto];
+}
+
+// Aviso de senha alterada. Nunca leva a senha.
+// $origem: 'usuario' (tela Alterar senha), 'link' (Esqueci minha senha) ou 'gestor'
+function mensagemSenhaAlterada($usuario, $origem) {
+    $quando = date('d/m/Y') . ' às ' . date('H:i');
+    $texto = "Olá, {$usuario['nome']}!\n\n";
+    if ($origem === 'gestor') {
+        $texto .= "A gestão da empresa cadastrou uma nova senha para a sua conta na Pesquisa de Clima Organizacional em $quando.\n\n"
+            . "A nova senha é entregue pela própria gestão. Depois de entrar, você pode trocá-la em \"Alterar senha\".\n\n"
+            . "Se você não pediu essa troca, procure o RH.\n\n";
+    } else {
+        $texto .= "A senha da sua conta na Pesquisa de Clima Organizacional foi alterada em $quando"
+            . ($origem === 'link' ? ' pelo link de "Esqueci minha senha"' : '') . ".\n\n"
+            . "Se foi você, pode ignorar este email.\n\n"
+            . "Se não foi você, entre em " . enderecoSistema() . ", clique em \"Esqueci minha senha\" para criar uma nova e avise o RH.\n\n";
+    }
+    $texto .= "Por segurança, este email nunca contém a sua senha.\n\nEquipe Climatize";
+    return ['para' => $usuario['email'], 'nome' => $usuario['nome'], 'assunto' => 'Sua senha foi alterada - Pesquisa de Clima', 'texto' => $texto];
+}
+
+// envia o aviso sem atrapalhar a troca de senha se o email falhar
+function avisarSenhaAlterada($usuario, $origem) {
+    if (!emailAtivo()) {
+        return false;
+    }
+    try {
+        return enviarEmails([mensagemSenhaAlterada($usuario, $origem)])['enviados'] === 1;
+    } catch (Throwable $e) {
+        error_log('Erro ao enviar aviso de senha alterada: ' . $e->getMessage());
+        return false;
+    }
 }
 
 

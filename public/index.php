@@ -94,6 +94,8 @@
         <h1 tabindex="-1">Entrar</h1>
         <p class="subtitulo-login">Funcionários vão para a pesquisa e gestores para o painel de gestão</p>
 
+        <div id="avisoLogin" class="aviso-sucesso escondido" role="status"></div>
+
         <label for="emailLogin">Email</label>
         <input id="emailLogin" type="email" placeholder="seu@email.com" autocomplete="username">
 
@@ -102,15 +104,94 @@
 
         <button id="botaoEntrar" class="botao azul-btn" onclick="entrar()">Entrar</button>
         <p id="erroLogin" class="erro" role="alert"></p>
+        <button class="link-esqueci" onclick="mostrarEsqueciSenha()">Esqueci minha senha</button>
 
         <div class="credenciais">
             <b>Credenciais de teste</b> (senha <b>123456</b> para todos)
-            <br>Gestor: gestor@escola.com
-            <br>Funcionários: funcionario1@escola.com, funcionario2@escola.com, funcionario3@escola.com
+            <br>Gestor: gestor@empresa.com
+            <br>Funcionários: funcionario1@empresa.com, funcionario2@empresa.com, funcionario3@empresa.com
         </div>
 
         <button class="voltar-login" onclick="mostrarInicio()">← Voltar para o início</button>
         <p class="rodape-links"><a href="privacidade.php" target="_blank" rel="noopener">Política de privacidade</a></p>
+    </main>
+</div>
+
+<!-- ===================== ESQUECI MINHA SENHA ===================== -->
+<div id="telaEsqueci" class="pagina login-gestor escondido">
+    <main class="login-card">
+        <div class="login-icone" aria-hidden="true">✉</div>
+        <h1 tabindex="-1">Esqueci minha senha</h1>
+        <p class="subtitulo-login">Informe o email cadastrado. Vamos enviar um link para você criar uma nova senha.</p>
+
+        <div id="camposEsqueci">
+            <label for="emailEsqueci">Email</label>
+            <input id="emailEsqueci" type="email" placeholder="seu@email.com" autocomplete="username" onkeydown="if (event.key === 'Enter') solicitarRedefinicao()">
+            <button id="botaoEsqueci" class="botao azul-btn" onclick="solicitarRedefinicao()">Enviar link</button>
+        </div>
+        <p id="erroEsqueci" class="erro" role="alert"></p>
+        <div id="sucessoEsqueci" class="aviso-sucesso escondido" role="status"></div>
+
+        <button class="voltar-login" onclick="mostrarLogin()">← Voltar para o login</button>
+    </main>
+</div>
+
+<!-- ===================== NOVA SENHA (link recebido por email) ===================== -->
+<div id="telaRedefinir" class="pagina login-gestor escondido">
+    <main class="login-card">
+        <div class="login-icone" aria-hidden="true">🔑</div>
+        <h1 tabindex="-1">Criar nova senha</h1>
+        <p id="textoRedefinir" class="subtitulo-login">Escolha uma nova senha para a sua conta.</p>
+
+        <div id="camposRedefinir">
+            <label for="novaSenhaRedefinir">Nova senha</label>
+            <input id="novaSenhaRedefinir" type="password" placeholder="Mínimo de 6 caracteres" autocomplete="new-password">
+
+            <label for="confirmaSenhaRedefinir">Repita a nova senha</label>
+            <input id="confirmaSenhaRedefinir" type="password" autocomplete="new-password" onkeydown="if (event.key === 'Enter') redefinirSenha()">
+
+            <label class="mostrar-senha">
+                <input type="checkbox" onchange="mostrarSenhas(this, 'telaRedefinir')">
+                <span>Mostrar senhas</span>
+            </label>
+
+            <button id="botaoRedefinir" class="botao azul-btn" onclick="redefinirSenha()">Salvar nova senha</button>
+        </div>
+        <p id="erroRedefinir" class="erro" role="alert"></p>
+        <button id="botaoNovoLink" class="botao-secundario escondido" onclick="mostrarEsqueciSenha()">Pedir um novo link</button>
+
+        <button class="voltar-login" onclick="mostrarLogin()">← Ir para o login</button>
+    </main>
+</div>
+
+<!-- ===================== ALTERAR SENHA (usuário logado) ===================== -->
+<div id="telaSenha" class="pagina login-gestor escondido">
+    <main class="login-card">
+        <div class="login-icone" aria-hidden="true">🔑</div>
+        <h1 tabindex="-1">Alterar senha</h1>
+        <p class="subtitulo-login">Depois da troca, você recebe um email de confirmação.</p>
+
+        <div id="camposSenha">
+            <label for="senhaAtual">Senha atual</label>
+            <input id="senhaAtual" type="password" autocomplete="current-password">
+
+            <label for="senhaNova">Nova senha</label>
+            <input id="senhaNova" type="password" placeholder="Mínimo de 6 caracteres" autocomplete="new-password">
+
+            <label for="senhaNovaConfirma">Repita a nova senha</label>
+            <input id="senhaNovaConfirma" type="password" autocomplete="new-password" onkeydown="if (event.key === 'Enter') alterarSenha()">
+
+            <label class="mostrar-senha">
+                <input type="checkbox" onchange="mostrarSenhas(this, 'telaSenha')">
+                <span>Mostrar senhas</span>
+            </label>
+
+            <button id="botaoAlterarSenha" class="botao azul-btn" onclick="alterarSenha()">Salvar nova senha</button>
+        </div>
+        <p id="erroSenha" class="erro" role="alert"></p>
+        <div id="sucessoSenha" class="aviso-sucesso escondido" role="status"></div>
+
+        <button id="botaoVoltarSenha" class="voltar-login" onclick="voltarDaSenha()">← Voltar</button>
     </main>
 </div>
 
@@ -152,7 +233,10 @@
     </header>
 
     <main class="conteudo">
-        <button class="voltar" onclick="sair()">‹ Sair</button>
+        <div class="acoes-questionario">
+            <button class="voltar" onclick="sair()">‹ Sair</button>
+            <button class="link-senha" onclick="mostrarAlterarSenha()"><span aria-hidden="true">🔑 </span>Alterar senha</button>
+        </div>
 
         <h1 id="saudacaoFuncionario" class="saudacao" tabindex="-1"></h1>
         <div id="formularioTitulo" class="formulario-titulo-ativo"></div>
@@ -213,6 +297,7 @@
         <button class="menu-item" data-view="funcionarios" onclick="mostrarView('funcionarios', this)"><span aria-hidden="true">◈ &nbsp;</span>Funcionários</button>
         <button class="menu-item" data-view="relatorios" onclick="mostrarView('relatorios', this)"><span aria-hidden="true">▦ &nbsp;</span>Relatórios</button>
 
+        <button class="menu-tema menu-senha" onclick="mostrarAlterarSenha()"><span aria-hidden="true">🔑 &nbsp;</span>Alterar senha</button>
         <button id="botaoTemaMenu" class="menu-tema" onclick="alternarTema()">☾ &nbsp; Modo escuro</button>
         <button class="menu-sair" onclick="sair()"><span aria-hidden="true">⎋ &nbsp;</span>Sair</button>
     </nav>
@@ -427,13 +512,14 @@
                 <input id="novoFuncNome" type="text" maxlength="100" placeholder="Nome completo">
 
                 <label for="novoFuncEmail">Email (usado no login)</label>
-                <input id="novoFuncEmail" type="email" maxlength="100" placeholder="nome@escola.com">
+                <input id="novoFuncEmail" type="email" maxlength="100" placeholder="nome@empresa.com">
 
-                <label for="novoFuncSenha">Senha</label>
+                <label for="novoFuncSenha">Senha provisória</label>
                 <input id="novoFuncSenha" type="password" placeholder="Mínimo de 6 caracteres" autocomplete="new-password">
+                <p class="dica-campo">Serve para o primeiro acesso. Depois, a pessoa pode trocar a senha em "Alterar senha" ou pelo "Esqueci minha senha", e a gestão não fica sabendo a senha nova.</p>
 
                 <label for="novoFuncCargo">Cargo (opcional)</label>
-                <input id="novoFuncCargo" type="text" maxlength="50" placeholder="Ex.: Professor">
+                <input id="novoFuncCargo" type="text" maxlength="50" placeholder="Ex.: Analista">
 
                 <label for="novoFuncAdmissao">Data de admissão (opcional)</label>
                 <input id="novoFuncAdmissao" type="date">
