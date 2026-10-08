@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0b56c9">
-    <title>Pesquisa de Clima Organizacional</title>
+    <title>Climatize · Pesquisa de Clima Organizacional</title>
     <script>
         // aplica o tema antes de desenhar a página (evita "piscar" claro no modo escuro)
         (function () {
@@ -19,6 +19,9 @@
             }
         })();
     </script>
+    <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="img/favicon-32.png" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -32,12 +35,13 @@
 <!-- ===================== TELA INICIAL ===================== -->
 <div id="telaPesquisa" class="pagina">
     <header class="topo">
-        <span>Pesquisa de Clima Organizacional</span>
-        <span aria-hidden="true">⌄</span>
+        <img class="topo-logo so-claro" src="img/logo-climatize-branco.svg" alt="Climatize" width="146" height="34">
+        <img class="topo-logo so-escuro" src="img/logo-climatize-escuro.svg" alt="Climatize" width="146" height="34">
+        <span class="topo-texto">Pesquisa de Clima Organizacional</span>
     </header>
 
     <main class="conteudo pesquisa-inicio">
-        <div class="icone-principal" aria-hidden="true">♢</div>
+        <div class="icone-principal" aria-hidden="true"><img class="so-claro" src="img/logo-simbolo-branco.svg" alt="" width="45" height="56"><img class="so-escuro" src="img/logo-simbolo-escuro.svg" alt="" width="45" height="56"></div>
         <h1 tabindex="-1">Pesquisa de Clima Organizacional</h1>
         <p class="subtitulo">Sua opinião é fundamental para melhorarmos juntos</p>
 
@@ -89,7 +93,7 @@
 <!-- ===================== LOGIN (funcionários e gestores) ===================== -->
 <div id="telaLogin" class="pagina login-gestor escondido">
     <main class="login-card">
-        <div class="login-icone" aria-hidden="true">▣</div>
+        <div class="login-icone login-icone-marca" aria-hidden="true"><img src="img/logo-simbolo-branco.svg" alt="" width="38" height="48"></div>
 
         <h1 tabindex="-1">Entrar</h1>
         <p class="subtitulo-login">Funcionários vão para a pesquisa e gestores para o painel de gestão</p>
@@ -228,8 +232,9 @@
 <!-- ===================== QUESTIONÁRIO (funcionário) ===================== -->
 <div id="telaQuestionario" class="pagina escondido">
     <header class="topo">
-        <span>Pesquisa de Clima Organizacional</span>
-        <span aria-hidden="true">⌄</span>
+        <img class="topo-logo so-claro" src="img/logo-climatize-branco.svg" alt="Climatize" width="146" height="34">
+        <img class="topo-logo so-escuro" src="img/logo-climatize-escuro.svg" alt="Climatize" width="146" height="34">
+        <span class="topo-texto">Pesquisa de Clima Organizacional</span>
     </header>
 
     <main class="conteudo">
@@ -285,7 +290,7 @@
 <!-- ===================== PAINEL DO GESTOR ===================== -->
 <div id="telaDashboard" class="dashboard escondido">
     <nav class="menu" aria-label="Menu do painel">
-        <div class="logo">Pesquisa de Clima<br><span>Organizacional</span></div>
+        <div class="logo"><img class="so-claro" src="img/logo-climatize-branco.svg" alt="Climatize" width="163" height="38"><img class="so-escuro" src="img/logo-climatize-escuro.svg" alt="Climatize" width="163" height="38"><span>Pesquisa de Clima Organizacional</span></div>
         <div class="gestor-label">Painel do Gestor</div>
         <div id="nomeGestor" class="nome-gestor"></div>
 

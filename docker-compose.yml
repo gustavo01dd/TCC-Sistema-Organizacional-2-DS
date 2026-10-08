@@ -47,7 +47,7 @@ services:
       SMTP_SENHA: ${SMTP_SENHA:-}
       # remetente institucional de todos os avisos (RH)
       SMTP_REMETENTE: ${SMTP_REMETENTE:-rh@empresa.local}
-      SMTP_NOME: "${SMTP_NOME:-Pesquisa de Clima - RH}"
+      SMTP_NOME: "${SMTP_NOME:-Climatize RH}"
       # "Responder para" dos lembretes. Vazio = email do gestor que clicou em Lembrete
       EMAIL_GESTOR_LEMBRETES: ${EMAIL_GESTOR_LEMBRETES:-}
       APP_URL: ${APP_URL:-http://localhost:8080}

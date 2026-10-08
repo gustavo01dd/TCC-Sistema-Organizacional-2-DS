@@ -664,7 +664,7 @@ function configuracaoSmtp() {
         'senha' => getenv('SMTP_SENHA') ?: '',
         'seguranca' => strtolower(getenv('SMTP_SEGURANCA') ?: ''),   // '', 'tls' (STARTTLS) ou 'ssl'
         'remetente' => getenv('SMTP_REMETENTE') ?: 'rh@empresa.local',   // remetente institucional (RH)
-        'nome' => getenv('SMTP_NOME') ?: 'Pesquisa de Clima - RH',
+        'nome' => getenv('SMTP_NOME') ?: 'Climatize RH',
     ];
 }
 
@@ -702,8 +702,138 @@ function cabecalhoCodificado($texto) {
     return '=?UTF-8?B?' . base64_encode(str_replace(["\r", "\n"], ' ', (string)$texto)) . '?=';
 }
 
+function base64Mime($conteudo) {
+    return rtrim(chunk_split(base64_encode($conteudo), 76, "\r\n"));
+}
+
+// Logo que vai no topo dos e-mails (PNG, porque Gmail e Outlook não mostram SVG).
+// Vai anexado à própria mensagem ("cid:"), então aparece mesmo com o sistema
+// rodando em localhost. Sem o arquivo, o e-mail sai com o nome em texto.
+function conteudoLogoEmail() {
+    static $logo = false;
+    if ($logo === false) {
+        $arquivo = __DIR__ . '/img/logo-email.png';
+        $logo = is_file($arquivo) ? (file_get_contents($arquivo) ?: null) : null;
+    }
+    return $logo;
+}
+
+// escapa o texto e transforma endereços http(s) em links
+function textoParaHtml($texto) {
+    $html = htmlspecialchars($texto, ENT_QUOTES, 'UTF-8');
+    $html = preg_replace_callback('~https?://[^\s<>"]*[^\s<>".,;:!?)]~', function ($m) {
+        return '<a href="' . $m[0] . '" style="color:#1565E0;text-decoration:underline;word-break:break-all">' . $m[0] . '</a>';
+    }, $html);
+    return nl2br($html, false);
+}
+
+// Versão HTML do e-mail, montada a partir do texto: faixa azul com o logo,
+// saudação em destaque, botão para o link principal e rodapé.
+// $m['botao'] = ['texto' => 'Responder a pesquisa', 'link' => 'http://...'] (opcional)
+function emailHtml(array $m, $cidLogo = null) {
+    $fonte = "'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+    $paragrafos = preg_split("/\n{2,}/", trim(str_replace("\r", '', (string)$m['texto'])));
+    $botao = (!empty($m['botao']['link']) && !empty($m['botao']['texto'])) ? $m['botao'] : null;
+    $corpo = '';
+    $resumo = '';
+    $assinatura = '';
+    foreach ($paragrafos as $i => $p) {
+        $p = trim($p);
+        if ($p === '') {
+            continue;
+        }
+        if ($p === 'Equipe Climatize') {
+            $assinatura = $p;
+            continue;
+        }
+        if ($i === 0 && str_starts_with($p, 'Olá')) {
+            $corpo .= '<p style="margin:0 0 18px;font-size:21px;line-height:1.3;font-weight:700;color:#0B2A6F">' . textoParaHtml($p) . '</p>';
+            continue;
+        }
+        if ($resumo === '') {
+            $resumo = $p;
+        }
+        if ($botao && str_contains($p, $botao['link'])) {
+            $resto = trim(str_replace($botao['link'], '', $p));
+            if ($resto !== '') {
+                $corpo .= '<p style="margin:0 0 14px">' . textoParaHtml($resto) . '</p>';
+            }
+            $link = htmlspecialchars($botao['link'], ENT_QUOTES, 'UTF-8');
+            $corpo .= '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 10px"><tr>'
+                . '<td bgcolor="#1565E0" style="border-radius:10px;background:#1565E0">'
+                . '<a href="' . $link . '" style="display:inline-block;padding:14px 28px;font-family:' . $fonte . ';font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px">'
+                . htmlspecialchars($botao['texto'], ENT_QUOTES, 'UTF-8') . '</a></td></tr></table>'
+                . '<p style="margin:0 0 18px;font-size:13px;line-height:1.5;color:#64748b">Se o botão não funcionar, copie e cole no navegador:<br>'
+                . '<a href="' . $link . '" style="color:#1565E0;word-break:break-all">' . $link . '</a></p>';
+            continue;
+        }
+        $corpo .= '<p style="margin:0 0 16px">' . textoParaHtml($p) . '</p>';
+    }
+    if ($assinatura !== '') {
+        $corpo .= '<p style="margin:26px 0 0;font-weight:700;color:#0B2A6F">' . htmlspecialchars($assinatura, ENT_QUOTES, 'UTF-8') . '</p>';
+    }
+
+    $topo = $cidLogo
+        ? '<img src="cid:' . $cidLogo . '" width="189" height="44" alt="Climatize" style="display:block;border:0;outline:none;width:189px;height:44px;color:#ffffff;font-family:' . $fonte . ';font-size:24px;font-weight:800">'
+        : '<span style="font-family:' . $fonte . ';font-size:26px;font-weight:800;color:#ffffff">Clima<span style="color:#FFB703">tize</span></span>';
+
+    preg_match('/^.{0,140}/su', preg_replace('/\s+/u', ' ', $resumo), $trecho);   // texto da prévia na caixa de entrada
+    $previa = htmlspecialchars($trecho[0] ?? '', ENT_QUOTES, 'UTF-8');
+    $titulo = htmlspecialchars((string)$m['assunto'], ENT_QUOTES, 'UTF-8');
+
+    return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        . '<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">'
+        . '<title>' . $titulo . '</title></head>'
+        . '<body style="margin:0;padding:0;background:#eef3fb">'
+        . '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#eef3fb">' . $previa . '</div>'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef3fb" style="background:#eef3fb"><tr><td align="center" style="padding:28px 12px">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:580px">'
+        . '<tr><td bgcolor="#0B2A6F" style="background:#0B2A6F;background-image:linear-gradient(135deg,#0B2A6F 0%,#1565E0 100%);padding:24px 32px;border-radius:16px 16px 0 0">'
+        . $topo
+        . '<div style="margin-top:8px;font-family:' . $fonte . ';font-size:13px;letter-spacing:.3px;color:#bcd3ff">Pesquisa de Clima Organizacional</div>'
+        . '</td></tr>'
+        . '<tr><td bgcolor="#ffffff" style="background:#ffffff;padding:32px;border-radius:0 0 16px 16px;font-family:' . $fonte . ';font-size:16px;line-height:1.6;color:#1f2937">'
+        . $corpo
+        . '</td></tr>'
+        . '<tr><td align="center" style="padding:18px 24px;font-family:' . $fonte . ';font-size:12px;line-height:1.5;color:#64748b">'
+        . '<b style="color:#0B2A6F">Climatize</b> · Pessoas unidas, clima melhor.<br>'
+        . 'E-mail automático. Suas respostas na pesquisa são anônimas.'
+        . '</td></tr>'
+        . '</table></td></tr></table></body></html>';
+}
+
+// Corpo MIME de uma mensagem: texto + HTML (multipart/alternative) e, se houver
+// o arquivo do logo, a imagem junto (multipart/related). Retorna [Content-Type, corpo].
+function montarCorpoEmail(array $m) {
+    $logo = conteudoLogoEmail();
+    $cid = 'logo@climatize';
+    $alt = 'clm-alt-' . bin2hex(random_bytes(8));
+    $partes = "--$alt\r\n"
+        . "Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+        . base64Mime($m['texto']) . "\r\n"
+        . "--$alt\r\n"
+        . "Content-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+        . base64Mime(emailHtml($m, $logo !== null ? $cid : null)) . "\r\n"
+        . "--$alt--";
+    if ($logo === null) {
+        return ["multipart/alternative; boundary=\"$alt\"", $partes];
+    }
+    $rel = 'clm-rel-' . bin2hex(random_bytes(8));
+    $corpo = "--$rel\r\n"
+        . "Content-Type: multipart/alternative; boundary=\"$alt\"\r\n\r\n"
+        . $partes . "\r\n"
+        . "--$rel\r\n"
+        . "Content-Type: image/png; name=\"climatize.png\"\r\nContent-Transfer-Encoding: base64\r\n"
+        . "Content-ID: <$cid>\r\nContent-Disposition: inline; filename=\"climatize.png\"\r\n\r\n"
+        . base64Mime($logo) . "\r\n"
+        . "--$rel--";
+    return ["multipart/related; boundary=\"$rel\"; type=\"multipart/alternative\"", $corpo];
+}
+
 // Envia várias mensagens numa única conexão.
-// Cada mensagem: ['para' => email, 'nome' => nome, 'assunto' => ..., 'texto' => ...]
+// Cada mensagem: ['para' => email, 'nome' => nome, 'assunto' => ..., 'texto' => ..., 'botao' => opcional]
+// O e-mail sai em texto e em HTML (com o logo do Climatize no topo).
 // Retorna ['enviados' => n, 'falhas' => n]
 function enviarEmails(array $mensagens) {
     $resultado = ['enviados' => 0, 'falhas' => 0];
@@ -775,14 +905,15 @@ function enviarEmails(array $mensagens) {
             if (!empty($m['responder_para']) && filter_var($m['responder_para'], FILTER_VALIDATE_EMAIL)) {
                 $cabecalhos[] = 'Reply-To: ' . cabecalhoCodificado($m['responder_nome'] ?? '') . " <{$m['responder_para']}>";
             }
+            [$tipoConteudo, $corpo] = montarCorpoEmail($m);
             $cabecalhos = array_merge($cabecalhos, [
                 'Message-ID: <' . bin2hex(random_bytes(12)) . '@' . (explode('@', $cfg['remetente'])[1] ?? 'localhost') . '>',
                 'MIME-Version: 1.0',
-                'Content-Type: text/plain; charset=UTF-8',
-                'Content-Transfer-Encoding: base64',
+                'Content-Type: ' . $tipoConteudo,
             ]);
-            // o corpo em base64 não tem linhas começando com ponto, então dispensa "dot-stuffing"
-            fwrite($conexao, implode("\r\n", $cabecalhos) . "\r\n\r\n" . rtrim(chunk_split(base64_encode($m['texto']), 76, "\r\n")) . "\r\n.\r\n");
+            // todas as partes vão em base64 e as divisórias começam com "--": nenhuma
+            // linha começa com ponto, então dispensa o "dot-stuffing" do SMTP
+            fwrite($conexao, implode("\r\n", $cabecalhos) . "\r\n\r\n" . $corpo . "\r\n.\r\n");
             [$codigo, $texto] = smtpLer($conexao);
             if ($codigo !== 250) {
                 throw new RuntimeException('SMTP recusou a mensagem: ' . trim($texto));
@@ -852,6 +983,7 @@ function mensagemAbertura($f, $formulario, $lembrete = false) {
         'nome' => $f['nome'],
         'assunto' => ($lembrete ? 'Lembrete: ' : 'Pesquisa de clima aberta: ') . $formulario['titulo'],
         'texto' => $texto,
+        'botao' => ['texto' => 'Responder a pesquisa', 'link' => enderecoSistema()],
     ];
 }
 
@@ -887,12 +1019,14 @@ function processarNotificacoes($pdo) {
                     . ".\n\nO relatório consolidado já foi gerado automaticamente e está disponível no painel do gestor, em Formulários > Ver relatório: "
                     . enderecoSistema() . "\n\nEquipe Climatize";
                 $assunto = 'Relatório disponível: ' . $formulario['titulo'];
+                $botao = ['texto' => 'Abrir o painel do gestor', 'link' => enderecoSistema()];
             } else {
                 $texto = "Olá, {$p['nome']}!\n\nA pesquisa \"{$formulario['titulo']}\" foi encerrada em " . formatarDataHoraBr($formulario['data_fechamento'])
                     . ".\n\nObrigado a todos que participaram! Os resultados são analisados apenas de forma agregada e ajudam a construir um ambiente de trabalho melhor.\n\nEquipe Climatize";
                 $assunto = 'Pesquisa encerrada: ' . $formulario['titulo'];
+                $botao = null;
             }
-            $mensagens[] = ['para' => $p['email'], 'nome' => $p['nome'], 'assunto' => $assunto, 'texto' => $texto];
+            $mensagens[] = ['para' => $p['email'], 'nome' => $p['nome'], 'assunto' => $assunto, 'texto' => $texto, 'botao' => $botao];
         }
         registrarEnvio($pdo, $chave, enviarEmails($mensagens));
     }
@@ -1021,14 +1155,20 @@ function buscarRedefinicaoValida($pdo, $token) {
     return $stmt->fetch() ?: null;
 }
 
-function mensagemLinkRedefinicao($usuario, $link) {
+// $porGestor = true quando o link foi enviado pela gestão (tela Funcionários)
+function mensagemLinkRedefinicao($usuario, $link, $porGestor = false) {
     $texto = "Olá, {$usuario['nome']}!\n\n"
-        . "Recebemos um pedido para redefinir a senha da sua conta na Pesquisa de Clima Organizacional.\n\n"
+        . ($porGestor
+            ? "A gestão enviou para você um link para criar uma nova senha na Pesquisa de Clima Organizacional. A sua senha atual continua valendo até você criar a nova.\n\n"
+            : "Recebemos um pedido para redefinir a senha da sua conta na Pesquisa de Clima Organizacional.\n\n")
         . "Para criar uma nova senha, abra o link abaixo. Ele vale por " . MINUTOS_VALIDADE_LINK_SENHA . " minutos e só pode ser usado uma vez:\n\n"
         . "$link\n\n"
-        . "Se você não pediu a troca, ignore este email: sua senha continua a mesma.\n\n"
+        . ($porGestor
+            ? "Se não quiser trocar a senha agora, é só ignorar este email. Dúvidas? Procure o RH.\n\n"
+            : "Se você não pediu a troca, ignore este email: sua senha continua a mesma.\n\n")
         . "Equipe Climatize";
-    return ['para' => $usuario['email'], 'nome' => $usuario['nome'], 'assunto' => 'Redefinição de senha - Pesquisa de Clima', 'texto' => $texto];
+    return ['para' => $usuario['email'], 'nome' => $usuario['nome'], 'assunto' => 'Redefinição de senha - Pesquisa de Clima', 'texto' => $texto,
+            'botao' => ['texto' => 'Criar nova senha', 'link' => $link]];
 }
 
 // Aviso de senha alterada. Nunca leva a senha.

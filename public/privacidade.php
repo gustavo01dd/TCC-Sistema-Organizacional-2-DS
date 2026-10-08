@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0b56c9">
-    <title>Política de Privacidade — Pesquisa de Clima Organizacional</title>
+    <title>Política de Privacidade · Climatize</title>
     <script>
         (function () {
             try {
@@ -16,12 +16,17 @@
             }
         })();
     </script>
+    <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="img/favicon-32.png" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="pagina">
     <header class="topo">
-        <span>Pesquisa de Clima Organizacional</span>
+        <img class="topo-logo so-claro" src="img/logo-climatize-branco.svg" alt="Climatize" width="146" height="34">
+        <img class="topo-logo so-escuro" src="img/logo-climatize-escuro.svg" alt="Climatize" width="146" height="34">
+        <span class="topo-texto">Pesquisa de Clima Organizacional</span>
     </header>
 
     <main class="conteudo">

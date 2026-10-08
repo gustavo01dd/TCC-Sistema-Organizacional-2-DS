@@ -96,7 +96,9 @@ $formulario = $dados['formulario'];
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Relatório — <?= e($formulario['titulo']) ?></title>
+<title>Relatório — <?= e($formulario['titulo']) ?> · Climatize</title>
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="img/favicon-32.png" type="image/png" sizes="32x32">
 <style>
     * { box-sizing: border-box; }
     body { font-family: Arial, Helvetica, sans-serif; color: #111827; margin: 0; background: #f7f9fc; }
@@ -120,6 +122,7 @@ $formulario = $dados['formulario'];
     .comentario { border-left: 3px solid #075fd3; padding: 8px 14px; margin-bottom: 12px; background: #f7f9fc; }
     .comentario small { color: #64748b; display: block; margin-bottom: 4px; }
     .aviso { background: #fdf3d9; color: #7a5b00; border-radius: 10px; padding: 15px; margin-top: 20px; }
+    .marca { display: block; height: 40px; width: auto; margin-bottom: 22px; }
     .rodape { margin-top: 35px; color: #64748b; font-size: 12px; text-align: center; }
     .botao-imprimir { display: block; margin: 20px auto 0; padding: 12px 22px; background: #075fd3; color: white; border: 0; border-radius: 8px; font-size: 16px; cursor: pointer; }
     @media (max-width: 650px) {
@@ -136,6 +139,7 @@ $formulario = $dados['formulario'];
 </head>
 <body>
 <div class="folha">
+    <img class="marca" src="img/logo-climatize.svg" alt="Climatize" width="172" height="40">
     <h1>Relatório de Clima Organizacional</h1>
     <p class="sub"><b><?= e($formulario['titulo']) ?></b></p>
     <p class="sub">Período: <?= dataBr($formulario['data_abertura'], true) ?> até <?= dataBr($formulario['data_fechamento'], true) ?></p>

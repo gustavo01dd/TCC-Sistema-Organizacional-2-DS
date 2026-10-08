@@ -6,6 +6,8 @@ o conteúdo das respostas nunca fica ligado à pessoa. Os gestores acompanham os
 em um painel com dashboard, resultados por pergunta e por categoria, comparação entre ciclos,
 comentários, cadastro de funcionários e relatórios. O visual usa fundos em azul e tem **modo escuro**,
 ligado pelo botão ☾ no topo das telas ou pelo item "Modo escuro" no menu do painel.
+O **logo do Climatize** aparece no topo das telas, no painel, no relatório impresso, no ícone da aba
+do navegador e nos e-mails enviados aos funcionários.
 
 ## Funcionalidades
 
@@ -40,6 +42,9 @@ ligado pelo botão ☾ no topo das telas ou pelo item "Modo escuro" no menu do p
   (médias, contagens e percentuais que se recalculam no Excel).
 - Comentários, relatório consolidado em PDF e logs de acesso.
 - **Alterar senha** pelo menu do painel.
+- **Redefinir senha** de funcionários e de outros gestores, na tela Funcionários: a pessoa recebe por e-mail
+  um link para criar a senha nova. A gestão não vê o link nem a senha, e a senha atual continua valendo até
+  a pessoa usar o link (no máximo 3 links por hora para a mesma pessoa).
 
 **Segurança do login**
 
@@ -123,6 +128,29 @@ Tudo roda em containers Docker, com o Nginx como servidor web.
 Nenhum. O React foi avaliado e descartado: não resolveria a responsividade no celular e deixaria
 o projeto mais complexo sem necessidade.
 
+### Identidade visual (logo)
+
+O símbolo é uma **prancheta de pesquisa** com **três pessoas** (a equipe), **barras crescentes**
+(resultados melhorando) e um **selo de check** (pesquisa respondida). Slogan: **"Pessoas unidas, clima melhor."**
+O logo foi redesenhado em vetor (SVG) a partir da arte original em PDF, então fica nítido em qualquer tamanho.
+No nome, "Clima" e "tize" têm cores diferentes.
+
+| Versão | Onde é usada | Prancheta | Nome |
+|---|---|---|---|
+| Fundo claro | Relatório impresso | Azul-marinho | "Clima" azul-marinho + "tize" azul |
+| Fundo azul (degradê) | Topo das telas, painel e e-mails no tema claro | Branca | "Clima" branco + "tize" âmbar |
+| Modo escuro | Topo das telas e painel no modo escuro | Azul | "Clima" branco + "tize" âmbar |
+| Ícone de app | Ícone da aba, ícone do celular e foto de perfil do Gmail do RH | Branca em quadrado azul | — |
+
+| Cor | Código |
+|---|---|
+| Azul principal | `#1565E0` |
+| Azul-marinho | `#0B2A6F` |
+| Âmbar | `#FFB703` |
+| Verde-água | `#14B8A6` |
+
+Os e-mails usam o logo em PNG (`logo-email.png`), porque Gmail e Outlook não mostram SVG.
+
 ## Estrutura
 
 ```
@@ -144,7 +172,15 @@ o projeto mais complexo sem necessidade.
 │   ├── funcoes.php               regras de negócio compartilhadas
 │   ├── excel.php                 gera as planilhas .xlsx e lê as planilhas de importação
 │   ├── privacidade.php           política de privacidade (modelo, LGPD)
-│   └── relatorio_impressao.php   relatório para imprimir / salvar em PDF
+│   ├── relatorio_impressao.php   relatório para imprimir / salvar em PDF
+│   └── img/                      logo do Climatize
+│       ├── logo-climatize.svg          símbolo + nome, para fundo claro
+│       ├── logo-climatize-branco.svg   símbolo + nome, para fundo azul (tema claro)
+│       ├── logo-climatize-escuro.svg   símbolo + nome, para o modo escuro
+│       ├── logo-simbolo*.svg           só o símbolo (claro, branco e escuro)
+│       ├── icone-app.svg               ícone de app (prancheta branca em quadrado azul)
+│       ├── favicon.svg / favicon-32.png / apple-touch-icon.png   ícone da aba e do celular
+│       └── logo-email.png              logo usado no topo dos e-mails
 └── backups/                      criada sozinha pelo backup diário
 ```
 
@@ -326,6 +362,7 @@ Se mudar um valor, ajuste também os textos que citam o número em `index.php` e
 | aceitar_termo | funcionário | Grava o aceite do termo de consentimento (RNF09) |
 | formulario_ativo, enviar_resposta | funcionário | Carregar e responder a pesquisa |
 | funcionarios, criar_funcionario, editar_funcionario, alterar_status_funcionario, excluir_funcionario | gestor | Cadastro (RF01) |
+| enviar_link_senha | gestor | Envia para um funcionário ou gestor o e-mail com o link de "Criar nova senha" |
 | importar_funcionarios, modelo_importacao | gestor | Importação por planilha e modelo para preencher |
 | formularios, detalhes_formulario, criar_formulario, editar_formulario, duplicar_formulario, excluir_formulario, alterar_status_formulario | gestor | Formulários (RF02) |
 | enviar_lembrete | gestor | Lembrete por e-mail para quem ainda não respondeu (RF08) |
@@ -340,12 +377,19 @@ Se mudar um valor, ajuste também os textos que citam o número em `index.php` e
 | Uma pesquisa encerra | Todos os usuários ativos, avisando que o relatório foi gerado |
 | O gestor clica em "Enviar lembrete" | Quem ainda não respondeu (no máximo um lembrete a cada 10 minutos) |
 | Alguém pede "Esqueci minha senha" | A própria pessoa, com o link para criar a senha nova |
+| O gestor clica em "Redefinir senha" (tela Funcionários) | A pessoa escolhida, com o link para criar a senha nova |
 | A senha muda (pela pessoa, pelo link ou pelo gestor) | A própria pessoa, confirmando a troca. **Nunca leva a senha** |
 
 Cada aviso é enviado uma vez só (tabela `notificacoes`). O e-mail nunca diz nada sobre as respostas.
 No ambiente de teste, tudo cai no Mailpit (http://localhost:8025).
 
-**Remetentes:** todos os e-mails saem de um remetente institucional (padrão "Pesquisa de Clima - RH").
+**Visual:** os e-mails saem em HTML com o **logo do Climatize** numa faixa azul no topo, a saudação em
+destaque e um **botão** para o link principal ("Responder a pesquisa", "Criar nova senha" ou
+"Abrir o painel do gestor"), com o endereço escrito embaixo caso o botão não funcione. A mensagem leva
+junto uma versão só em texto, para programas de e-mail que não mostram HTML. O logo vai anexado à
+própria mensagem (imagem embutida com `cid:`), então aparece mesmo com o sistema rodando em `localhost`.
+
+**Remetentes:** todos os e-mails saem de um remetente institucional (padrão "Climatize RH").
 Nos lembretes, o campo **"Responder para"** leva o e-mail do gestor que clicou no botão (ou o de
 `EMAIL_GESTOR_LEMBRETES`, se preenchido): quem tiver dúvida responde e fala direto com a gestão.
 Assim é preciso configurar uma conta de e-mail só, e o lembrete não chega com cara de cobrança do chefe,
@@ -369,7 +413,7 @@ Não precisa mexer no código nem no `docker-compose.yml`:
 | `SMTP_HOST` / `SMTP_PORT` | `smtp.gmail.com` / `587` |
 | `SMTP_SEGURANCA` | `tls` (porta 587) ou `ssl` (porta 465) |
 | `SMTP_USUARIO` / `SMTP_SENHA` | o Gmail da conta e a senha de app |
-| `SMTP_REMETENTE` / `SMTP_NOME` | o mesmo Gmail / `Pesquisa de Clima - RH` |
+| `SMTP_REMETENTE` / `SMTP_NOME` | o mesmo Gmail / nome que aparece como remetente (ex.: `Climatize RH`) |
 | `EMAIL_GESTOR_LEMBRETES` | "Responder para" dos lembretes (vazio = e-mail do gestor que enviou) |
 | `APP_URL` | endereço que vai no link dos e-mails |
 
@@ -380,8 +424,15 @@ Cuidados:
   da empresa (ex.: `http://192.168.0.10:8080`, com o celular ou PC na mesma rede) ou o endereço do
   servidor onde o sistema estiver publicado.
 - O `.env` já está no `.gitignore`: a senha de app não vai para o GitHub.
-- Uma conta Gmail comum envia até 500 e-mails por dia. Os primeiros podem cair no spam.
+- Uma conta Gmail comum envia até 500 e-mails por dia.
+- Os primeiros e-mails de uma conta nova costumam cair no **spam**. Em cada caixa que recebeu, clique em
+  "Não é spam" e adicione o e-mail do RH aos contatos; se quiser garantir, crie um filtro
+  (`from:` + e-mail do RH) com a opção "Nunca enviar para spam".
 - Contas corporativas (Google Workspace) podem ter a senha de app bloqueada pelo administrador.
+- **Logo na foto de perfil:** a bolinha com a foto do remetente, no Gmail de quem recebe, vem da **foto da
+  conta Google do RH**, não do código. Para aparecer o logo, entre na conta do RH, abra
+  https://myaccount.google.com → **Informações pessoais** → **Foto** e envie o arquivo `foto-perfil-gmail.png`
+  (entregue junto com o projeto). Pode levar algumas horas para aparecer para todo mundo.
 - Se o e-mail não chegar, `docker compose logs php` mostra o motivo (por exemplo, login recusado).
   Para voltar ao Mailpit, apague o `.env` e rode `docker compose up -d`.
 

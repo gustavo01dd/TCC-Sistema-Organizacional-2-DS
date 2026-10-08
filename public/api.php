@@ -168,13 +168,29 @@ try {
             $email = trim((string)($dados['email'] ?? ''));
             $senha = (string)($dados['senha'] ?? '');
 
-            $stmt = $pdo->prepare("SELECT id, nome, email, senha_hash, tipo_perfil, ativo, termo_versao FROM funcionarios WHERE email = ?");
+            // limite de tentativas: 5 senhas erradas no mesmo email bloqueiam o login dele por 15 minutos
+            $chaveEmail = chaveTentativa('login', $email);
+            $chaveIp = chaveTentativa('ip', ipCliente());
+            $bloqueio = minutosDeBloqueio($pdo, $chaveEmail, MAX_TENTATIVAS_LOGIN, MINUTOS_BLOQUEIO_LOGIN)
+                ?? minutosDeBloqueio($pdo, $chaveIp, MAX_TENTATIVAS_POR_IP, MINUTOS_BLOQUEIO_LOGIN);
+            if ($bloqueio !== null) {
+                responderJson([
+                    'erro' => 'Muitas tentativas com senha errada. Por segurança, o login foi bloqueado por alguns minutos. '
+                        . 'Tente de novo em ' . $bloqueio . ($bloqueio === 1 ? ' minuto' : ' minutos') . ' ou use "Esqueci minha senha".',
+                    'bloqueado' => true,
+                    'minutos' => $bloqueio,
+                ], 429);
+            }
+
+            $stmt = $pdo->prepare("SELECT id, nome, email, senha_hash, tipo_perfil, ativo, termo_versao, senha_alterada_em FROM funcionarios WHERE email = ?");
             $stmt->execute([$email]);
             $usuario = $stmt->fetch();
 
             if ($usuario && $usuario['ativo'] && password_verify($senha, $usuario['senha_hash'])) {
+                limparTentativas($pdo, $chaveEmail);
                 session_regenerate_id(true);
-                $_SESSION = ['usuario_id' => (int)$usuario['id']];
+                $_SESSION = [];
+                marcarSessao($usuario['id'], $usuario['senha_alterada_em']);
                 if ($usuario['tipo_perfil'] === 'gestor') {
                     registrarLog($pdo, (int)$usuario['id'], $usuario['email'], 'login');
                 }
@@ -190,7 +206,16 @@ try {
             if ($usuario && $usuario['tipo_perfil'] === 'gestor') {
                 registrarLog($pdo, (int)$usuario['id'], $usuario['email'], 'falha_login');
             }
-            responderJson(['erro' => 'Email ou senha incorretos'], 401);
+            registrarTentativa($pdo, $chaveEmail);
+            registrarTentativa($pdo, $chaveIp);
+            $restantes = MAX_TENTATIVAS_LOGIN - contarTentativas($pdo, $chaveEmail, MINUTOS_BLOQUEIO_LOGIN);
+            $erro = 'Email ou senha incorretos.';
+            if ($restantes <= 0) {
+                $erro .= ' O login deste email foi bloqueado por ' . MINUTOS_BLOQUEIO_LOGIN . ' minutos. Se esqueceu a senha, use "Esqueci minha senha".';
+            } elseif ($restantes <= 2) {
+                $erro .= ' Você tem mais ' . $restantes . ($restantes === 1 ? ' tentativa' : ' tentativas') . ' antes de o login ser bloqueado por ' . MINUTOS_BLOQUEIO_LOGIN . ' minutos.';
+            }
+            responderJson(['erro' => $erro], 401);
             break;
 
         case 'logout':
@@ -201,6 +226,118 @@ try {
             $_SESSION = [];
             session_destroy();
             responderJson(['sucesso' => true]);
+            break;
+
+        // =======================================================
+        // SENHAS: alterar (logado) e "Esqueci minha senha" (por email)
+        // =======================================================
+
+        // qualquer usuário logado troca a própria senha informando a atual
+        case 'alterar_senha':
+            exigirMetodo('POST');
+            $usuario = usuarioLogado($pdo);
+            if (!$usuario) {
+                responderJson(['erro' => 'Faça login para continuar'], 401);
+            }
+            $dados = corpoJson();
+            $atual = (string)($dados['senha_atual'] ?? '');
+            $nova = (string)($dados['nova_senha'] ?? '');
+
+            $chaveSenha = chaveTentativa('alterar_senha', $usuario['id']);
+            $bloqueio = minutosDeBloqueio($pdo, $chaveSenha, MAX_TENTATIVAS_LOGIN, MINUTOS_BLOQUEIO_LOGIN);
+            if ($bloqueio !== null) {
+                responderJson(['erro' => 'Muitas tentativas com a senha atual errada. Tente de novo em ' . $bloqueio . ($bloqueio === 1 ? ' minuto.' : ' minutos.')], 429);
+            }
+
+            $stmt = $pdo->prepare("SELECT senha_hash FROM funcionarios WHERE id = ?");
+            $stmt->execute([$usuario['id']]);
+            $hashAtual = (string)$stmt->fetchColumn();
+            if (!password_verify($atual, $hashAtual)) {
+                registrarTentativa($pdo, $chaveSenha);
+                responderJson(['erro' => 'A senha atual está incorreta.'], 400);
+            }
+            $erroSenha = validarSenhaNova($nova);
+            if ($erroSenha) {
+                responderJson(['erro' => $erroSenha . '.'], 400);
+            }
+            if (password_verify($nova, $hashAtual)) {
+                responderJson(['erro' => 'A nova senha precisa ser diferente da atual.'], 400);
+            }
+
+            $marca = definirSenha($pdo, (int)$usuario['id'], $nova);
+            limparTentativas($pdo, $chaveSenha);
+            limparTentativas($pdo, chaveTentativa('login', $usuario['email']));
+            // esta sessão continua valendo; as outras (com a senha antiga) caem
+            session_regenerate_id(true);
+            marcarSessao($usuario['id'], $marca);
+            if ($usuario['tipo_perfil'] === 'gestor') {
+                registrarLog($pdo, (int)$usuario['id'], $usuario['email'], 'senha_alterada');
+            }
+            responderJson(['sucesso' => true, 'email_enviado' => avisarSenhaAlterada($usuario, 'usuario')]);
+            break;
+
+        // Esqueci minha senha: manda um link por email. A resposta é sempre a mesma,
+        // exista ou não o email, para ninguém descobrir quem tem cadastro.
+        case 'solicitar_redefinicao':
+            exigirMetodo('POST');
+            if (!emailAtivo()) {
+                responderJson(['erro' => 'O envio de emails não está configurado no servidor. Peça ao gestor para cadastrar uma nova senha para você.'], 503);
+            }
+            $email = trim((string)(corpoJson()['email'] ?? ''));
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                responderJson(['erro' => 'Informe um email válido.'], 400);
+            }
+            $chaveIp = chaveTentativa('redefinicao_ip', ipCliente());
+            if (minutosDeBloqueio($pdo, $chaveIp, MAX_TENTATIVAS_POR_IP, 60) !== null) {
+                responderJson(['erro' => 'Muitos pedidos de redefinição. Tente de novo mais tarde.'], 429);
+            }
+            registrarTentativa($pdo, $chaveIp);
+
+            $stmt = $pdo->prepare("SELECT id, nome, email FROM funcionarios WHERE email = ? AND ativo = 1");
+            $stmt->execute([$email]);
+            $usuario = $stmt->fetch();
+            if ($usuario) {
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM redefinicoes_senha WHERE funcionario_id = ? AND criado_em >= DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+                $stmt->execute([$usuario['id']]);
+                if ((int)$stmt->fetchColumn() < MAX_PEDIDOS_REDEFINICAO_HORA) {
+                    $link = criarLinkRedefinicao($pdo, (int)$usuario['id']);
+                    enviarEmails([mensagemLinkRedefinicao($usuario, $link)]);
+                }
+            }
+            responderJson([
+                'sucesso' => true,
+                'mensagem' => 'Se este email estiver cadastrado, você vai receber em alguns minutos um link para criar uma nova senha. '
+                    . 'O link vale por ' . MINUTOS_VALIDADE_LINK_SENHA . ' minutos. Confira também a caixa de spam.',
+            ]);
+            break;
+
+        // a tela do link confere se ele ainda vale antes de pedir a nova senha
+        case 'verificar_redefinicao':
+            exigirMetodo('POST');
+            responderJson(['valido' => buscarRedefinicaoValida($pdo, corpoJson()['token'] ?? '') !== null]);
+            break;
+
+        case 'redefinir_senha':
+            exigirMetodo('POST');
+            $dados = corpoJson();
+            $redefinicao = buscarRedefinicaoValida($pdo, $dados['token'] ?? '');
+            if (!$redefinicao) {
+                responderJson(['erro' => 'Este link é inválido, já foi usado ou venceu. Peça um novo em "Esqueci minha senha".'], 400);
+            }
+            $nova = (string)($dados['nova_senha'] ?? '');
+            $erroSenha = validarSenhaNova($nova);
+            if ($erroSenha) {
+                responderJson(['erro' => $erroSenha . '.'], 400);
+            }
+
+            definirSenha($pdo, (int)$redefinicao['funcionario_id'], $nova);
+            // quem provou ter acesso ao email sai do bloqueio de tentativas
+            limparTentativas($pdo, chaveTentativa('login', $redefinicao['email']));
+            if ($redefinicao['tipo_perfil'] === 'gestor') {
+                registrarLog($pdo, (int)$redefinicao['funcionario_id'], $redefinicao['email'], 'senha_redefinida');
+            }
+            avisarSenhaAlterada($redefinicao, 'link');
+            responderJson(['sucesso' => true, 'email' => $redefinicao['email']]);
             break;
 
         // =======================================================
@@ -393,15 +530,60 @@ try {
                 responderJson(['erro' => 'Já existe outro cadastro com este email'], 409);
             }
 
+            $stmt = $pdo->prepare("UPDATE funcionarios SET nome = ?, email = ?, cargo = ?, data_admissao = ?, tipo_perfil = ? WHERE id = ?");
+            $stmt->execute([$d['nome'], $d['email'], $d['cargo'], $d['data_admissao'], $d['perfil'], $funcionarioId]);
+
+            // nova senha definida pelo gestor: derruba as sessões antigas da pessoa e avisa por email
+            $emailEnviado = false;
             if ($d['senha'] !== '') {
-                $stmt = $pdo->prepare("UPDATE funcionarios SET nome = ?, email = ?, cargo = ?, data_admissao = ?, tipo_perfil = ?, senha_hash = ? WHERE id = ?");
-                $stmt->execute([$d['nome'], $d['email'], $d['cargo'], $d['data_admissao'], $d['perfil'], password_hash($d['senha'], PASSWORD_DEFAULT), $funcionarioId]);
-            } else {
-                $stmt = $pdo->prepare("UPDATE funcionarios SET nome = ?, email = ?, cargo = ?, data_admissao = ?, tipo_perfil = ? WHERE id = ?");
-                $stmt->execute([$d['nome'], $d['email'], $d['cargo'], $d['data_admissao'], $d['perfil'], $funcionarioId]);
+                $marca = definirSenha($pdo, $funcionarioId, $d['senha']);
+                limparTentativas($pdo, chaveTentativa('login', $d['email']));
+                if ($funcionarioId === (int)$gestor['id']) {
+                    marcarSessao($funcionarioId, $marca);
+                    $emailEnviado = avisarSenhaAlterada(['nome' => $d['nome'], 'email' => $d['email']], 'usuario');
+                } else {
+                    $emailEnviado = avisarSenhaAlterada(['nome' => $d['nome'], 'email' => $d['email']], 'gestor');
+                }
             }
 
-            responderJson(['sucesso' => true]);
+            responderJson(['sucesso' => true, 'email_senha_enviado' => $emailEnviado]);
+            break;
+
+        // O gestor manda para a pessoa (funcionário ou gestor) um link de "criar nova senha".
+        // A gestão não vê o link nem a senha nova; a senha atual vale até a pessoa usar o link.
+        case 'enviar_link_senha':
+            $gestor = exigirGestor($pdo);
+            exigirMetodo('POST');
+            if (!emailAtivo()) {
+                responderJson(['erro' => 'O envio de emails não está configurado no servidor (SMTP). Use "Editar" para cadastrar uma senha provisória.'], 503);
+            }
+            $funcionarioId = (int)(corpoJson()['funcionario_id'] ?? 0);
+            $stmt = $pdo->prepare("SELECT id, nome, email, ativo FROM funcionarios WHERE id = ?");
+            $stmt->execute([$funcionarioId]);
+            $pessoa = $stmt->fetch();
+            if (!$pessoa) {
+                responderJson(['erro' => 'Cadastro não encontrado'], 404);
+            }
+            if (!(int)$pessoa['ativo']) {
+                responderJson(['erro' => 'Este cadastro está desativado. Reative-o antes de enviar o link.'], 400);
+            }
+            // mesmo limite do "Esqueci minha senha": no máximo alguns links por hora para a mesma pessoa
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM redefinicoes_senha WHERE funcionario_id = ? AND criado_em >= DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+            $stmt->execute([$funcionarioId]);
+            if ((int)$stmt->fetchColumn() >= MAX_PEDIDOS_REDEFINICAO_HORA) {
+                responderJson(['erro' => 'Já foram enviados ' . MAX_PEDIDOS_REDEFINICAO_HORA . ' links para esta pessoa na última hora. Aguarde um pouco antes de enviar outro.'], 429);
+            }
+            $link = criarLinkRedefinicao($pdo, $funcionarioId);
+            $envio = enviarEmails([mensagemLinkRedefinicao($pessoa, $link, true)]);
+            if ($envio['enviados'] !== 1) {
+                responderJson(['erro' => 'Não foi possível enviar o email. Confira a configuração de email do servidor (docker compose logs php).'], 502);
+            }
+            registrarLog($pdo, (int)$gestor['id'], $gestor['email'], 'link_senha_enviado');
+            responderJson([
+                'sucesso' => true,
+                'mensagem' => 'Link enviado para ' . $pessoa['email'] . '. Ele vale por ' . MINUTOS_VALIDADE_LINK_SENHA
+                    . ' minutos. A senha atual continua valendo até a pessoa criar a nova.',
+            ]);
             break;
 
         case 'alterar_status_funcionario':
@@ -645,13 +827,13 @@ try {
 
         // RF08: lembrete por e-mail para quem ainda não respondeu
         case 'enviar_lembrete':
-            exigirGestor($pdo);
+            $gestor = exigirGestor($pdo);
             exigirMetodo('POST');
             if (!emailAtivo()) {
                 responderJson(['erro' => 'O envio de e-mails não está configurado no servidor (SMTP).'], 400);
             }
             $dados = corpoJson();
-            [$resultado, $erro] = enviarLembrete($pdo, (int)($dados['formulario_id'] ?? 0));
+            [$resultado, $erro] = enviarLembrete($pdo, (int)($dados['formulario_id'] ?? 0), $gestor);
             if ($erro) {
                 responderJson(['erro' => $erro], 409);
             }

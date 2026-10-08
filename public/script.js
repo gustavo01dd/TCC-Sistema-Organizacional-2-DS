@@ -21,10 +21,14 @@ var funcionarioEditandoId = null;   // null = cadastrando; número = editando es
 var formularioEditandoId = null;    // null = criando; número = editando esse formulário
 var perguntasEditor = [];           // perguntas do editor de formulários
 
-var TELAS = ["telaPesquisa", "telaLogin", "telaTermo", "telaQuestionario", "telaObrigado", "telaDashboard"];
+var TELAS = ["telaPesquisa", "telaLogin", "telaEsqueci", "telaRedefinir", "telaSenha", "telaTermo", "telaQuestionario", "telaObrigado", "telaDashboard"];
 var VIEWS = ["dashboard", "resultados", "comparar", "formularios", "comentarios", "funcionarios", "relatorios"];
 var CATEGORIAS_SUGERIDAS = ["Ambiente", "Liderança", "Comunicação", "Recursos e infraestrutura", "Desenvolvimento", "Engajamento", "Qualidade de vida", "Reconhecimento"];
 var HORAS_RASCUNHO = 24;
+var TAMANHO_MINIMO_SENHA = 6;
+
+var tokenRedefinicao = null;        // código do link "Esqueci minha senha"
+var telaAntesDaSenha = null;        // para onde o "Voltar" da tela Alterar senha leva
 
 document.addEventListener("DOMContentLoaded", iniciar);
 
@@ -32,6 +36,14 @@ function iniciar() {
     aplicarTema(temaAtual());
     carregarAvisoPesquisa();
     limparRascunhosAntigos();
+
+    // link do email "Esqueci minha senha": index.php?redefinir=<código>
+    var token = new URLSearchParams(window.location.search).get("redefinir");
+    if (token) {
+        // tira o código da barra de endereço (e do histórico do navegador)
+        history.replaceState(null, "", window.location.pathname);
+        mostrarRedefinir(token);
+    }
 
     // se a pessoa nunca escolheu um tema, acompanha o tema do sistema
     try {
@@ -174,10 +186,18 @@ function mostrarInicio() {
     carregarAvisoPesquisa();
 }
 
-function mostrarLogin() {
+function mostrarLogin(mensagem, email) {
     mostrarTela("telaLogin");
     document.getElementById("erroLogin").innerText = "";
-    document.getElementById("emailLogin").focus();
+    var aviso = document.getElementById("avisoLogin");
+    aviso.innerText = mensagem || "";
+    aviso.classList.toggle("escondido", !mensagem);
+    if (email) {
+        document.getElementById("emailLogin").value = email;
+        document.getElementById("senhaLogin").focus();
+    } else {
+        document.getElementById("emailLogin").focus();
+    }
 }
 
 // Login único: a API responde o perfil e ele decide a próxima tela
@@ -194,6 +214,7 @@ async function entrar() {
     }
 
     botao.disabled = true;
+    document.getElementById("avisoLogin").classList.add("escondido");
     try {
         var r = await chamarApi("login", { email: email, senha: senha });
         if (!r.ok || !r.dados.sucesso) {
@@ -265,6 +286,196 @@ async function aceitarTermo() {
         mostrarPesquisa();
     } catch (e) {
         erro.innerText = "Erro de conexão. Tente novamente.";
+    }
+}
+
+
+// ===================== Senhas =====================
+
+function mostrarSenhas(caixa, telaId) {
+    document.querySelectorAll("#" + telaId + " input[data-senha], #" + telaId + " input[type=password]").forEach(function (campo) {
+        campo.setAttribute("data-senha", "1");
+        campo.type = caixa.checked ? "text" : "password";
+    });
+}
+
+function limparCamposSenha(telaId) {
+    document.querySelectorAll("#" + telaId + " input[data-senha], #" + telaId + " input[type=password]").forEach(function (campo) {
+        campo.value = "";
+        campo.type = "password";
+    });
+    var caixa = document.querySelector("#" + telaId + " .mostrar-senha input");
+    if (caixa) caixa.checked = false;
+}
+
+// confere a nova senha antes de mandar para o servidor; retorna a mensagem de erro ou ""
+function conferirNovaSenha(nova, confirmacao) {
+    if (nova.length < TAMANHO_MINIMO_SENHA) return "A nova senha precisa ter pelo menos " + TAMANHO_MINIMO_SENHA + " caracteres.";
+    if (nova !== confirmacao) return "As duas senhas não são iguais. Digite a mesma senha nos dois campos.";
+    return "";
+}
+
+// ---------- Esqueci minha senha ----------
+
+function mostrarEsqueciSenha() {
+    mostrarTela("telaEsqueci");
+    var email = document.getElementById("emailLogin").value.trim();
+    document.getElementById("emailEsqueci").value = email;
+    document.getElementById("camposEsqueci").classList.remove("escondido");
+    document.getElementById("erroEsqueci").innerText = "";
+    document.getElementById("sucessoEsqueci").classList.add("escondido");
+    document.getElementById("emailEsqueci").focus();
+}
+
+async function solicitarRedefinicao() {
+    var email = document.getElementById("emailEsqueci").value.trim();
+    var erro = document.getElementById("erroEsqueci");
+    var sucesso = document.getElementById("sucessoEsqueci");
+    var botao = document.getElementById("botaoEsqueci");
+    erro.innerText = "";
+
+    if (!email) {
+        erro.innerText = "Informe o seu email.";
+        return;
+    }
+
+    botao.disabled = true;
+    try {
+        var r = await chamarApi("solicitar_redefinicao", { email: email });
+        if (!r.ok) {
+            erro.innerText = r.dados.erro || "Não foi possível enviar o link. Tente novamente.";
+            return;
+        }
+        document.getElementById("camposEsqueci").classList.add("escondido");
+        sucesso.innerText = r.dados.mensagem;
+        sucesso.classList.remove("escondido");
+    } catch (e) {
+        erro.innerText = "Erro de conexão. Tente novamente.";
+    } finally {
+        botao.disabled = false;
+    }
+}
+
+// ---------- Nova senha pelo link do email ----------
+
+async function mostrarRedefinir(token) {
+    tokenRedefinicao = token;
+    mostrarTela("telaRedefinir");
+    limparCamposSenha("telaRedefinir");
+    document.getElementById("erroRedefinir").innerText = "";
+    document.getElementById("botaoNovoLink").classList.add("escondido");
+    document.getElementById("camposRedefinir").classList.add("escondido");
+    document.getElementById("textoRedefinir").innerText = "Conferindo o link...";
+
+    try {
+        var r = await chamarApi("verificar_redefinicao", { token: token });
+        if (r.ok && r.dados.valido) {
+            document.getElementById("textoRedefinir").innerText = "Escolha uma nova senha para a sua conta.";
+            document.getElementById("camposRedefinir").classList.remove("escondido");
+            document.getElementById("novaSenhaRedefinir").focus();
+        } else {
+            linkInvalido();
+        }
+    } catch (e) {
+        document.getElementById("textoRedefinir").innerText = "";
+        document.getElementById("erroRedefinir").innerText = "Erro de conexão. Recarregue a página e tente de novo.";
+    }
+}
+
+function linkInvalido(mensagem) {
+    document.getElementById("camposRedefinir").classList.add("escondido");
+    document.getElementById("textoRedefinir").innerText = "";
+    document.getElementById("erroRedefinir").innerText = mensagem ||
+        "Este link é inválido, já foi usado ou venceu. Peça um novo link para criar a sua senha.";
+    document.getElementById("botaoNovoLink").classList.remove("escondido");
+    tokenRedefinicao = null;
+}
+
+async function redefinirSenha() {
+    var nova = document.getElementById("novaSenhaRedefinir").value;
+    var confirmacao = document.getElementById("confirmaSenhaRedefinir").value;
+    var erro = document.getElementById("erroRedefinir");
+    var botao = document.getElementById("botaoRedefinir");
+    erro.innerText = conferirNovaSenha(nova, confirmacao);
+    if (erro.innerText) return;
+
+    botao.disabled = true;
+    try {
+        var r = await chamarApi("redefinir_senha", { token: tokenRedefinicao, nova_senha: nova });
+        if (r.ok && r.dados.sucesso) {
+            tokenRedefinicao = null;
+            limparCamposSenha("telaRedefinir");
+            mostrarLogin("Senha criada com sucesso! Entre com a nova senha.", r.dados.email);
+        } else if (r.status === 400 && /link/i.test(r.dados.erro || "")) {
+            linkInvalido(r.dados.erro);
+        } else {
+            erro.innerText = r.dados.erro || "Não foi possível salvar a nova senha.";
+        }
+    } catch (e) {
+        erro.innerText = "Erro de conexão. Tente novamente.";
+    } finally {
+        botao.disabled = false;
+    }
+}
+
+// ---------- Alterar senha (logado) ----------
+
+function mostrarAlterarSenha() {
+    telaAntesDaSenha = TELAS.find(function (id) {
+        return id !== "telaSenha" && !document.getElementById(id).classList.contains("escondido");
+    }) || "telaPesquisa";
+    mostrarTela("telaSenha");
+    limparCamposSenha("telaSenha");
+    document.getElementById("camposSenha").classList.remove("escondido");
+    document.getElementById("erroSenha").innerText = "";
+    document.getElementById("sucessoSenha").classList.add("escondido");
+    document.getElementById("botaoVoltarSenha").innerText = telaAntesDaSenha === "telaDashboard" ? "← Voltar para o painel" : "← Voltar para a pesquisa";
+    document.getElementById("senhaAtual").focus();
+}
+
+function voltarDaSenha() {
+    limparCamposSenha("telaSenha");
+    mostrarTela(telaAntesDaSenha || "telaPesquisa");
+    if (telaAntesDaSenha === "telaDashboard") {
+        var botaoMenu = document.querySelector(".menu-senha");
+        if (botaoMenu) botaoMenu.focus();
+    }
+}
+
+async function alterarSenha() {
+    var atual = document.getElementById("senhaAtual").value;
+    var nova = document.getElementById("senhaNova").value;
+    var confirmacao = document.getElementById("senhaNovaConfirma").value;
+    var erro = document.getElementById("erroSenha");
+    var sucesso = document.getElementById("sucessoSenha");
+    var botao = document.getElementById("botaoAlterarSenha");
+
+    erro.innerText = "";
+    if (!atual) {
+        erro.innerText = "Informe a sua senha atual.";
+        return;
+    }
+    erro.innerText = conferirNovaSenha(nova, confirmacao);
+    if (erro.innerText) return;
+
+    botao.disabled = true;
+    try {
+        var r = await chamarApi("alterar_senha", { senha_atual: atual, nova_senha: nova });
+        if (sessaoExpirada(r)) return;
+        if (!r.ok) {
+            erro.innerText = r.dados.erro || "Não foi possível alterar a senha.";
+            return;
+        }
+        limparCamposSenha("telaSenha");
+        document.getElementById("camposSenha").classList.add("escondido");
+        sucesso.innerText = "Senha alterada com sucesso!" +
+            (r.dados.email_enviado ? " Enviamos um email de confirmação para você." : "");
+        sucesso.classList.remove("escondido");
+        document.getElementById("botaoVoltarSenha").focus();
+    } catch (e) {
+        erro.innerText = "Erro de conexão. Tente novamente.";
+    } finally {
+        botao.disabled = false;
     }
 }
 
@@ -1573,6 +1784,9 @@ function renderizarListaFuncionarios(lista, temPesquisaAtiva) {
         if (souEu) {
             acoes += '<span class="voce">(você)</span>';
         } else {
+            if (ativo) {
+                acoes += '<button class="botao-pequeno" onclick="enviarLinkSenha(' + id + ')" aria-label="Enviar link para ' + nome + ' redefinir a senha">Redefinir senha</button>';
+            }
             acoes += '<button class="botao-pequeno" onclick="alternarStatusFuncionario(' + id + ', ' + (ativo ? 0 : 1) + ')" aria-label="' +
                 (ativo ? "Desativar " : "Reativar ") + nome + '">' + (ativo ? "Desativar" : "Reativar") + '</button>';
             acoes += '<button class="botao-pequeno botao-encerrar" onclick="excluirFuncionario(' + id + ')" aria-label="Excluir ' + nome + '">Excluir</button>';
@@ -1664,7 +1878,14 @@ async function salvarFuncionario() {
             return;
         }
 
-        alert(editando ? "Cadastro atualizado!" : "Cadastro criado! A pessoa já pode entrar com esse email e senha.");
+        if (!editando) {
+            alert("Cadastro criado! Entregue o email e a senha provisória à pessoa. Depois de entrar, ela pode trocar a senha em \"Alterar senha\".");
+        } else if (senha !== "") {
+            alert("Cadastro atualizado! A nova senha já vale" +
+                (r.dados.email_senha_enviado ? " e a pessoa recebeu um email avisando da troca." : "."));
+        } else {
+            alert("Cadastro atualizado!");
+        }
         cancelarEdicaoFuncionario();
         carregarListaFuncionarios();
     } catch (e) {
@@ -1686,6 +1907,23 @@ async function alternarStatusFuncionario(id, novoAtivo) {
         alert("Erro de conexão.");
     }
     carregarListaFuncionarios();
+}
+
+// envia para a pessoa um email com o link "Criar nova senha" (a gestão não vê a senha nova)
+async function enviarLinkSenha(id) {
+    var f = ultimaListaFuncionarios.find(function (x) { return Number(x.id) === Number(id); });
+    var quem = f ? f.nome + " (" + f.email + ")" : "esta pessoa";
+    if (!confirm("Enviar para " + quem + " um email com um link para criar uma nova senha?\n\n" +
+        "A senha atual continua funcionando até a pessoa usar o link.")) return;
+
+    try {
+        var r = await chamarApi("enviar_link_senha", { funcionario_id: id });
+        if (sessaoExpirada(r)) return;
+        alert(r.ok ? r.dados.mensagem : (r.dados.erro || "Não foi possível enviar o link."));
+        if (r.ok) anunciar("Link de redefinição de senha enviado.");
+    } catch (e) {
+        alert("Erro de conexão.");
+    }
 }
 
 async function excluirFuncionario(id) {
@@ -1939,7 +2177,10 @@ async function carregarLogsAcesso() {
         var rotulos = {
             login: ["acao-login", "Entrou no painel"],
             logout: ["acao-logout", "Saiu do painel"],
-            falha_login: ["acao-falha", "Tentativa de login recusada"]
+            falha_login: ["acao-falha", "Tentativa de login recusada"],
+            senha_alterada: ["acao-senha", "Alterou a própria senha"],
+            senha_redefinida: ["acao-senha", "Criou nova senha pelo link do email"],
+            link_senha_enviado: ["acao-senha", "Enviou um link de redefinição de senha"]
         };
 
         container.innerHTML = logs.map(function (log) {

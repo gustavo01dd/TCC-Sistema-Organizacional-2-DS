@@ -211,6 +211,27 @@ h1 {
     z-index: 5;
 }
 
+/* o logo tem uma versão para o tema claro (prancheta branca) e outra para o escuro (prancheta azul) */
+[data-tema="escuro"] .so-claro,
+:root:not([data-tema="escuro"]) .so-escuro {
+    display: none !important;
+}
+
+/* logo do Climatize no cabeçalho, com o nome da pesquisa ao lado */
+.topo-logo {
+    display: block;
+    height: 34px;
+    width: auto;
+}
+
+.topo-texto {
+    margin-left: 6px;
+    padding-left: 14px;
+    border-left: 1px solid rgba(255, 255, 255, 0.32);
+    line-height: 22px;
+    opacity: 0.92;
+}
+
 /* ===================== Tela inicial ===================== */
 
 .pesquisa-inicio {
@@ -231,6 +252,12 @@ h1 {
     font-size: 40px;
     margin: 6px auto 22px;
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.icone-principal img {
+    display: block;
+    width: 45px;
+    height: 56px;
 }
 
 .subtitulo {
@@ -448,6 +475,12 @@ h1 {
     justify-content: center;
     font-size: 32px;
     box-shadow: 0 10px 24px rgba(11, 94, 215, 0.35);
+}
+
+.login-icone-marca img {
+    display: block;
+    width: 38px;
+    height: 48px;
 }
 
 .login-card h1 {
@@ -742,13 +775,23 @@ textarea {
 }
 
 .logo {
-    font-size: 19px;
-    font-weight: 800;
-    padding: 0 14px;
+    padding: 0 10px;
     line-height: 1.25;
 }
 
+.logo img {
+    display: block;
+    height: 38px;
+    width: auto;
+}
+
 .logo span {
+    display: block;
+    margin-top: 8px;
+    padding-left: 2px;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
     color: #93c5fd;
 }
 
@@ -1606,6 +1649,109 @@ a.voltar {
     cursor: pointer;
 }
 
+/* ===================== Senhas (esqueci, nova senha, alterar) ===================== */
+
+.link-esqueci {
+    display: block;
+    margin: 14px auto 0;
+    border: 0;
+    background: transparent;
+    color: var(--primaria);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.link-esqueci:hover {
+    text-decoration: underline;
+}
+
+.aviso-sucesso {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: var(--sucesso-fundo);
+    color: var(--sucesso);
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.login-card label.mostrar-senha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0 0;
+    font-weight: 500;
+    color: var(--texto-suave);
+    cursor: pointer;
+}
+
+.login-card .mostrar-senha input {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    margin: 0;
+    accent-color: var(--primaria);
+    cursor: pointer;
+}
+
+.botao-secundario {
+    display: block;
+    width: 100%;
+    margin-top: 16px;
+    padding: 14px;
+    border: 2px solid var(--primaria);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--primaria);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.botao-secundario:hover {
+    background: var(--superficie-2);
+}
+
+/* Sair e Alterar senha no topo do questionário */
+.acoes-questionario {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.acoes-questionario .voltar {
+    margin-bottom: 0;
+}
+
+.link-senha {
+    padding: 8px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--texto-sobre-azul);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.link-senha:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+/* no menu do painel, "Alterar senha" abre o grupo de baixo (tema e sair) */
+.menu-senha {
+    margin-top: auto;
+}
+
+.menu-senha ~ .menu-tema {
+    margin-top: 0;
+}
+
+.acao-senha { color: var(--primaria); font-weight: 700; }
+
 /* ===================== Agradecimento ===================== */
 
 .obrigado-card {
@@ -2260,7 +2406,8 @@ a.voltar {
         font-size: 14px;
     }
 
-    .menu-tema {
+    .menu-tema,
+    .menu-senha {
         margin-top: 0;
     }
 
@@ -2363,7 +2510,7 @@ a.voltar {
 }
 
 @media (max-width: 480px) {
-    /* a setinha do topo some para o título caber melhor */
+    /* no celular o topo mostra só o logo */
     .topo span:last-child {
         display: none;
     }

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS funcionarios (
     ativo TINYINT(1) NOT NULL DEFAULT 1,
     termo_versao INT UNSIGNED NULL,
     termo_aceito_em DATETIME NULL,
+    senha_alterada_em DATETIME NULL,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -145,4 +146,34 @@ CREATE TABLE IF NOT EXISTS notificacoes (
     destinatarios INT UNSIGNED NOT NULL DEFAULT 0,
     falhas INT UNSIGNED NOT NULL DEFAULT 0,
     CONSTRAINT fk_notificacao_formulario FOREIGN KEY (formulario_id) REFERENCES formularios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- redefinicoes_senha: links de "Esqueci minha senha".
+-- Guarda só o hash do código do link: quem ler o banco não
+-- consegue usar o link. Cada link vale por pouco tempo e uma vez só.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS redefinicoes_senha (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    funcionario_id INT UNSIGNED NOT NULL,
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    criado_em DATETIME NOT NULL,
+    expira_em DATETIME NOT NULL,
+    usado_em DATETIME NULL,
+    INDEX idx_redefinicao_funcionario (funcionario_id, criado_em),
+    CONSTRAINT fk_redefinicao_funcionario FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- tentativas: logins com senha errada e pedidos de redefinição,
+-- usados para bloquear quem tenta adivinhar senhas.
+-- A chave é um hash (não guarda o email nem o IP legíveis) e
+-- os registros são apagados depois de 1 dia.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS tentativas (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    chave CHAR(64) NOT NULL,
+    criada_em DATETIME NOT NULL,
+    INDEX idx_tentativa_chave (chave, criada_em),
+    INDEX idx_tentativa_data (criada_em)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
