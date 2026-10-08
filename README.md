@@ -21,7 +21,10 @@ do navegador e nos e-mails enviados aos funcionários.
 - **Acessibilidade**: dá para responder tudo só com o teclado (Tab, setas, espaço), os controles têm
   descrição para leitores de tela, o foco fica sempre visível e as animações são desligadas para
   quem pediu "reduzir movimento" no sistema.
-- E-mails de aviso quando uma pesquisa abre, quando encerra e lembretes enviados pela gestão.
+- E-mails de aviso quando uma pesquisa abre, quando encerra, lembretes enviados pela gestão e um
+  **lembrete automático** nos últimos dias para quem ainda não respondeu.
+- **Primeiro acesso**: a senha cadastrada pela gestão é provisória. Ao entrar pela primeira vez, a pessoa
+  é levada para a tela "Crie a sua senha" e só continua depois de criar uma senha própria.
 - **Alterar senha** (botão no topo da pesquisa), com e-mail de confirmação depois da troca.
 - **Esqueci minha senha**: recebe por e-mail um link para criar uma senha nova, sem precisar pedir ao gestor.
 
@@ -45,6 +48,10 @@ do navegador e nos e-mails enviados aos funcionários.
 - **Redefinir senha** de funcionários e de outros gestores, na tela Funcionários: a pessoa recebe por e-mail
   um link para criar a senha nova. A gestão não vê o link nem a senha, e a senha atual continua valendo até
   a pessoa usar o link (no máximo 3 links por hora para a mesma pessoa).
+- Selo **"Senha provisória"** na lista de funcionários para quem ainda não fez o primeiro acesso.
+- **Lembrete automático** programado sozinho para 48 horas antes do fim da pesquisa, com a data mostrada
+  na tela Formulários (e, depois, para quantas pessoas foi enviado).
+- **Dados de demonstração** prontos para a apresentação, com um comando (veja "Na hora da apresentação").
 
 **Segurança do login**
 
@@ -161,6 +168,8 @@ Os e-mails usam o logo em PNG (`logo-email.png`), porque Gmail e Outlook não mo
 ├── database/
 │   ├── schema.sql                estrutura do banco
 │   ├── seed.php                  cria/atualiza as tabelas + dados de exemplo
+│   ├── demo.php                  dados de demonstração para a apresentação (rodar só na hora)
+│   ├── tarefas.php               tarefas agendadas (encerramentos e avisos), rodado pelo agendador
 │   └── chave.key                 chave da criptografia (criada sozinha pelo seed, fora do git)
 ├── .env.exemplo                  modelo para configurar um e-mail de verdade (Gmail)
 ├── public/
@@ -200,12 +209,46 @@ Depois abra:
 
 O seed espera o banco ficar pronto sozinho e pode ser rodado quantas vezes quiser (não duplica nada).
 
+Além do site, sobe o container **agendador**, que a cada 5 minutos encerra as pesquisas vencidas (gerando
+o relatório) e manda os avisos por e-mail, inclusive o lembrete automático. Assim os avisos saem na hora
+certa mesmo sem ninguém usando o sistema. O que ele envia aparece em `docker compose logs agendador`.
+
+## Na hora da apresentação (dados de demonstração)
+
+Para o painel aparecer completo na frente da banca, rode **um comando só, na hora da apresentação**:
+
+```bash
+docker compose exec php php /var/www/database/demo.php
+```
+
+Ele cria, em segundos:
+
+- **24 funcionários fictícios** (e-mails `@demo.climatize`, que **nunca recebem e-mail**);
+- uma pesquisa **encerrada há uns 5 meses** (19 respostas, com relatório consolidado);
+- uma pesquisa **aberta agora** (começou há 5 dias e fecha daqui a 7, com 22 respostas);
+- comentários criptografados, como num uso real.
+
+A comparação entre os dois ciclos conta uma história: **comunicação e liderança melhoraram**, enquanto
+**recursos e qualidade de vida pioraram** (bons pontos para comentar na apresentação).
+
+Os usuários de teste (Matheus, Felipe e Funcionário 3) ficam **sem responder** a pesquisa aberta. Durante a
+apresentação, dá para responder pelo celular e ver a resposta aparecer no painel na hora, ou clicar em
+**Lembrete** e mostrar o e-mail chegando no Gmail (as contas fictícias não recebem nada).
+
+Observações:
+
+- A pesquisa que estiver aberta é encerrada (sem mandar e-mail) para dar lugar à demonstração.
+- Os sorteios são sempre iguais: os números saem idênticos toda vez que o comando é rodado.
+- Rodar de novo recria tudo do zero. Para apagar os dados de demonstração:
+  `docker compose exec php php /var/www/database/demo.php --limpar`
+
 ### Atualizando de uma versão anterior deste projeto
 
 Não precisa apagar o banco. Rode os mesmos dois comandos (ou o comando único abaixo): o `--build` sobe
-o novo container do Mailpit e o seed acrescenta as colunas e tabelas novas, criptografa os comentários e
-relatórios que já existiam, completa a pesquisa de exemplo e converte os usuários de teste antigos
-(`@escola.com`) para `@empresa.com`, mantendo o histórico de quem já respondeu.
+os containers novos (Mailpit e agendador) e o seed acrescenta as colunas e tabelas novas, criptografa os
+comentários e relatórios que já existiam, completa a pesquisa de exemplo e converte os usuários de teste
+antigos (`@escola.com` e depois `gestor@empresa.com` e `funcionario1/2@empresa.com`) para as contas atuais (Gmail), mantendo o histórico
+de quem já respondeu.
 
 ```bash
 docker compose up -d --build && docker compose exec php php /var/www/database/seed.php
@@ -224,9 +267,9 @@ Em produção, a chave também pode ser passada pela variável de ambiente `APP_
 
 | Email | Perfil | Vai para |
 |---|---|---|
-| gestor@empresa.com | Gestor | Painel de gestão |
-| funcionario1@empresa.com | Funcionário | Pesquisa |
-| funcionario2@empresa.com | Funcionário | Pesquisa |
+| gestorclimatize@gmail.com (Gestor Climatize) | Gestor | Painel de gestão (Gmail de verdade: recebe o "Relatório disponível" e as respostas aos lembretes) |
+| funcionario01.empresa@gmail.com (Matheus Cunha) | Funcionário | Pesquisa (Gmail de verdade, para testar os e-mails) |
+| funcionario02.empresa@gmail.com (Felipe Alves) | Funcionário | Pesquisa (Gmail de verdade, para testar os e-mails) |
 | funcionario3@empresa.com | Funcionário | Pesquisa |
 
 - A pesquisa de exemplo fica aberta por **7 dias** (RN01). Depois disso ela é encerrada sozinha
@@ -239,6 +282,9 @@ Em produção, a chave também pode ser passada pela variável de ambiente `APP_
 - Para testar a importação, baixe o modelo na tela Funcionários, preencha e envie. A linha de exemplo
   (`maria.exemplo@empresa.com`) é ignorada.
 - Rodar o seed de novo volta a senha dos 4 usuários de teste para `123456` (útil se você trocar e esquecer).
+  Os usuários de teste não passam pela troca obrigatória de senha.
+- Para ver a **troca obrigatória de senha**: cadastre alguém na tela Funcionários e entre com a senha que você
+  definiu. O sistema pede para criar uma senha nova antes de continuar.
 - Para testar o "Esqueci minha senha": na tela de login, clique no link, informe o e-mail e abra o
   link do e-mail que chega no Mailpit (http://localhost:8025).
 
@@ -348,6 +394,9 @@ Cuidados extras (RN07), porque o gestor vê quem já respondeu:
 | `MAX_TENTATIVAS_POR_IP` | 100 | Senhas erradas por IP em 15 minutos (contra robôs; alto porque a empresa toda pode sair pelo mesmo IP) |
 | `MINUTOS_VALIDADE_LINK_SENHA` | 60 | Validade do link de "Esqueci minha senha" |
 | `MAX_PEDIDOS_REDEFINICAO_HORA` | 3 | Links de redefinição por conta a cada hora |
+| `HORAS_ANTES_LEMBRETE_AUTOMATICO` | 48 | Quantas horas antes do fim sai o lembrete automático |
+| `HORAS_MINIMAS_ANTES_DO_LEMBRETE` | 24 | A pesquisa precisa estar aberta há pelo menos esse tempo para o lembrete sair |
+| `DOMINIO_DEMONSTRACAO` | demo.climatize | Domínio das contas fictícias, que nunca recebem e-mail |
 
 Se mudar um valor, ajuste também os textos que citam o número em `index.php` e `script.js`.
 
@@ -358,6 +407,7 @@ Se mudar um valor, ajuste também os textos que citam o número em `index.php` e
 | status_pesquisa | público | Aviso da tela inicial (aberta / encerrada) |
 | login, logout | todos | Login único; o perfil decide a tela |
 | alterar_senha | logado | Troca a própria senha (pede a atual) e manda e-mail de confirmação |
+| definir_senha_inicial | logado com senha provisória | Primeiro acesso: troca a senha provisória por uma senha própria |
 | solicitar_redefinicao, verificar_redefinicao, redefinir_senha | público | "Esqueci minha senha": link por e-mail, conferência do link e nova senha |
 | aceitar_termo | funcionário | Grava o aceite do termo de consentimento (RNF09) |
 | formulario_ativo, enviar_resposta | funcionário | Carregar e responder a pesquisa |
@@ -376,6 +426,7 @@ Se mudar um valor, ajuste também os textos que citam o número em `index.php` e
 | Uma pesquisa abre | Funcionários ativos que podem responder (não respondem os que estão nos 21 dias da RN03) |
 | Uma pesquisa encerra | Todos os usuários ativos, avisando que o relatório foi gerado |
 | O gestor clica em "Enviar lembrete" | Quem ainda não respondeu (no máximo um lembrete a cada 10 minutos) |
+| Faltam 48 horas para a pesquisa fechar (lembrete automático, uma vez por pesquisa) | Quem ainda não respondeu |
 | Alguém pede "Esqueci minha senha" | A própria pessoa, com o link para criar a senha nova |
 | O gestor clica em "Redefinir senha" (tela Funcionários) | A pessoa escolhida, com o link para criar a senha nova |
 | A senha muda (pela pessoa, pelo link ou pelo gestor) | A própria pessoa, confirmando a troca. **Nunca leva a senha** |
@@ -441,6 +492,7 @@ Sem `SMTP_HOST`, o sistema funciona normalmente e só não envia e-mails.
 ## Antes de usar de verdade
 
 - Remova o quadro "Credenciais de teste" da tela de login (`public/index.php`).
+- Se rodou a demonstração, apague os dados fictícios (`demo.php --limpar`).
 - Troque as senhas do `docker-compose.yml` e as senhas dos usuários de teste.
 - Publique com HTTPS.
 - Revise a política de privacidade (`public/privacidade.php`) e preencha os campos entre colchetes.

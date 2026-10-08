@@ -37,6 +37,16 @@ const MAX_TENTATIVAS_POR_IP = 100;
 const MINUTOS_VALIDADE_LINK_SENHA = 60;
 const MAX_PEDIDOS_REDEFINICAO_HORA = 3;
 
+// Lembrete automático: quando faltarem 48 horas para a pesquisa fechar, quem ainda
+// não respondeu recebe um lembrete (uma vez por ciclo). Só sai se a pesquisa já
+// estiver aberta há pelo menos 24 horas, para não chegar junto com o aviso de abertura.
+const HORAS_ANTES_LEMBRETE_AUTOMATICO = 48;
+const HORAS_MINIMAS_ANTES_DO_LEMBRETE = 24;
+
+// Contas dos dados de demonstração (database/demo.php) usam este domínio e
+// nunca recebem e-mail: os endereços não existem de verdade.
+const DOMINIO_DEMONSTRACAO = 'demo.climatize';
+
 
 // ---------- usuário logado ----------
 
@@ -46,7 +56,7 @@ function usuarioLogado($pdo) {
     if (empty($_SESSION['usuario_id'])) {
         return null;
     }
-    $stmt = $pdo->prepare("SELECT id, nome, email, tipo_perfil, ativo, termo_versao, senha_alterada_em FROM funcionarios WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, nome, email, tipo_perfil, ativo, termo_versao, senha_alterada_em, trocar_senha FROM funcionarios WHERE id = ?");
     $stmt->execute([$_SESSION['usuario_id']]);
     $usuario = $stmt->fetch();
     if (!$usuario || !$usuario['ativo']) {
@@ -668,6 +678,10 @@ function configuracaoSmtp() {
     ];
 }
 
+function contaDemonstracao($email) {
+    return str_ends_with(strtolower(trim((string)$email)), '@' . DOMINIO_DEMONSTRACAO);
+}
+
 function emailAtivo() {
     return configuracaoSmtp()['host'] !== '';
 }
@@ -887,6 +901,9 @@ function enviarEmails(array $mensagens) {
 
     foreach ($mensagens as $m) {
         $para = trim((string)$m['para']);
+        if (contaDemonstracao($para)) {
+            continue;   // endereço inventado dos dados de demonstração: não envia e não conta como falha
+        }
         if (!filter_var($para, FILTER_VALIDATE_EMAIL)) {
             $resultado['falhas']++;
             continue;
@@ -968,11 +985,16 @@ function funcionariosQuePodemResponder($pdo, $formularioId) {
     return $lista;
 }
 
+// $lembrete: lembrete enviado pelo gestor (true) ou automático ('automatico')
 function mensagemAbertura($f, $formulario, $lembrete = false) {
     $texto = "Olá, {$f['nome']}!\n\n";
-    $texto .= $lembrete
-        ? "Lembrete: a pesquisa de clima \"{$formulario['titulo']}\" continua aberta e ainda não recebemos a sua participação.\n\n"
-        : "A pesquisa de clima \"{$formulario['titulo']}\" está aberta.\n\n";
+    if ($lembrete === 'automatico') {
+        $texto .= "Últimos dias: a pesquisa de clima \"{$formulario['titulo']}\" está terminando e ainda não recebemos a sua participação. A sua opinião faz diferença!\n\n";
+    } elseif ($lembrete) {
+        $texto .= "Lembrete: a pesquisa de clima \"{$formulario['titulo']}\" continua aberta e ainda não recebemos a sua participação.\n\n";
+    } else {
+        $texto .= "A pesquisa de clima \"{$formulario['titulo']}\" está aberta.\n\n";
+    }
     if ($formulario['data_fechamento']) {
         $texto .= 'Ela fica disponível até ' . formatarDataHoraBr($formulario['data_fechamento']) . ".\n\n";
     }
@@ -981,7 +1003,7 @@ function mensagemAbertura($f, $formulario, $lembrete = false) {
     return [
         'para' => $f['email'],
         'nome' => $f['nome'],
-        'assunto' => ($lembrete ? 'Lembrete: ' : 'Pesquisa de clima aberta: ') . $formulario['titulo'],
+        'assunto' => ($lembrete === 'automatico' ? 'Últimos dias para responder: ' : ($lembrete ? 'Lembrete: ' : 'Pesquisa de clima aberta: ')) . $formulario['titulo'],
         'texto' => $texto,
         'botao' => ['texto' => 'Responder a pesquisa', 'link' => enderecoSistema()],
     ];
@@ -1030,6 +1052,40 @@ function processarNotificacoes($pdo) {
         }
         registrarEnvio($pdo, $chave, enviarEmails($mensagens));
     }
+
+    // lembrete automático: perto do fim da pesquisa, para quem ainda não respondeu
+    $stmt = $pdo->prepare("SELECT id, titulo, data_abertura, data_fechamento FROM formularios
+                           WHERE status = 'ativo' AND data_abertura IS NOT NULL AND data_fechamento IS NOT NULL
+                             AND data_abertura <= DATE_SUB(NOW(), INTERVAL ? HOUR)
+                             AND data_fechamento > NOW() AND data_fechamento <= DATE_ADD(NOW(), INTERVAL ? HOUR)");
+    $stmt->execute([HORAS_MINIMAS_ANTES_DO_LEMBRETE, HORAS_ANTES_LEMBRETE_AUTOMATICO]);
+    foreach ($stmt->fetchAll() as $formulario) {
+        $chave = 'lembrete-auto-' . chaveCiclo($formulario);
+        if (!reservarNotificacao($pdo, (int)$formulario['id'], 'lembrete_auto', $chave)) {
+            continue;
+        }
+        $responderPara = getenv('EMAIL_GESTOR_LEMBRETES') ?: '';
+        $mensagens = array_map(function ($f) use ($formulario, $responderPara) {
+            $m = mensagemAbertura($f, $formulario, 'automatico');
+            if ($responderPara !== '') {
+                $m['responder_para'] = $responderPara;
+                $m['responder_nome'] = 'Gestão';
+            }
+            return $m;
+        }, funcionariosQuePodemResponder($pdo, (int)$formulario['id']));
+        registrarEnvio($pdo, $chave, enviarEmails($mensagens));
+    }
+}
+
+// Quando o lembrete automático desta pesquisa vai sair (ou null, se não vai):
+// 48 horas antes do fim, mas nunca antes de a pesquisa completar 24 horas aberta.
+function lembreteAutomaticoPrevisto($formulario) {
+    if (empty($formulario['data_abertura']) || empty($formulario['data_fechamento'])) {
+        return null;
+    }
+    $fim = strtotime($formulario['data_fechamento']);
+    $quando = max($fim - HORAS_ANTES_LEMBRETE_AUTOMATICO * 3600, strtotime($formulario['data_abertura']) + HORAS_MINIMAS_ANTES_DO_LEMBRETE * 3600);
+    return $quando < $fim ? date('Y-m-d H:i:s', $quando) : null;
 }
 
 // Lembrete enviado pelo gestor para quem ainda não respondeu.
@@ -1122,10 +1178,12 @@ function minutosDeBloqueio($pdo, $chave, $limite, $minutos) {
 
 // Grava a nova senha, invalida os links de redefinição pendentes e muda a
 // "marca" da senha (derruba as sessões abertas com a senha antiga).
+// $provisoria = true quando a senha foi definida pela gestão: a pessoa vai ter
+// que criar a própria senha no próximo acesso.
 // Retorna a nova marca, para manter logado quem acabou de trocar.
-function definirSenha($pdo, $usuarioId, $novaSenha) {
-    $stmt = $pdo->prepare("UPDATE funcionarios SET senha_hash = ?, senha_alterada_em = NOW() WHERE id = ?");
-    $stmt->execute([password_hash($novaSenha, PASSWORD_DEFAULT), $usuarioId]);
+function definirSenha($pdo, $usuarioId, $novaSenha, $provisoria = false) {
+    $stmt = $pdo->prepare("UPDATE funcionarios SET senha_hash = ?, senha_alterada_em = NOW(), trocar_senha = ? WHERE id = ?");
+    $stmt->execute([password_hash($novaSenha, PASSWORD_DEFAULT), $provisoria ? 1 : 0, $usuarioId]);
     $stmt = $pdo->prepare("UPDATE redefinicoes_senha SET usado_em = NOW() WHERE funcionario_id = ? AND usado_em IS NULL");
     $stmt->execute([$usuarioId]);
     $stmt = $pdo->prepare("SELECT senha_alterada_em FROM funcionarios WHERE id = ?");
@@ -1178,7 +1236,7 @@ function mensagemSenhaAlterada($usuario, $origem) {
     $texto = "Olá, {$usuario['nome']}!\n\n";
     if ($origem === 'gestor') {
         $texto .= "A gestão da empresa cadastrou uma nova senha para a sua conta na Pesquisa de Clima Organizacional em $quando.\n\n"
-            . "A nova senha é entregue pela própria gestão. Depois de entrar, você pode trocá-la em \"Alterar senha\".\n\n"
+            . "A nova senha é entregue pela própria gestão e é provisória: no próximo acesso, o sistema vai pedir para você criar a sua própria senha.\n\n"
             . "Se você não pediu essa troca, procure o RH.\n\n";
     } else {
         $texto .= "A senha da sua conta na Pesquisa de Clima Organizacional foi alterada em $quando"
@@ -1422,7 +1480,8 @@ function importarCadastros($pdo, array $linhas) {
 
     if ($novos) {
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare("INSERT INTO funcionarios (nome, email, senha_hash, cargo, data_admissao, tipo_perfil) VALUES (?, ?, ?, ?, ?, ?)");
+        // a senha da planilha é provisória: cada pessoa cria a sua no primeiro acesso
+        $stmt = $pdo->prepare("INSERT INTO funcionarios (nome, email, senha_hash, cargo, data_admissao, tipo_perfil, trocar_senha) VALUES (?, ?, ?, ?, ?, ?, 1)");
         foreach ($novos as $d) {
             $stmt->execute([$d['nome'], $d['email'], password_hash($d['senha'], PASSWORD_DEFAULT), $d['cargo'], $d['data_admissao'], $d['perfil']]);
         }

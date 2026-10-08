@@ -50,6 +50,7 @@ $migracoes = [
     "ALTER TABLE resposta_itens MODIFY nota TINYINT UNSIGNED NULL",
     "ALTER TABLE resposta_itens ADD COLUMN IF NOT EXISTS opcao TINYINT UNSIGNED NULL AFTER nota",
     "ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS senha_alterada_em DATETIME NULL AFTER termo_aceito_em",
+    "ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS trocar_senha TINYINT(1) NOT NULL DEFAULT 0 AFTER senha_alterada_em",
 ];
 foreach ($migracoes as $comando) {
     $pdo->exec($comando);
@@ -129,15 +130,46 @@ if ($idExemplo) {
         ->execute([$idExemplo]);
 }
 
-// 6) usuários de teste (todos com a senha 123456)
+// 5c) o gestor e os funcionários 1 e 2 de teste passaram a usar contas Gmail de verdade
+//     (para testar os e-mails). O cadastro antigo vira o novo, mantendo o histórico.
+//     Se os dois já existirem, o antigo era uma cópia criada por um seed anterior:
+//     é apagado se nunca respondeu nada, senão fica desativado.
+$contasReais = [
+    ['gestor@empresa.com', 'gestorclimatize@gmail.com', 'Gestor Teste', 'Gestor Climatize'],
+    ['funcionario1@empresa.com', 'funcionario01.empresa@gmail.com', 'Funcionário 1', 'Matheus Cunha'],
+    ['funcionario2@empresa.com', 'funcionario02.empresa@gmail.com', 'Funcionário 2', 'Felipe Alves'],
+];
+$trocaConta = $pdo->prepare("UPDATE funcionarios SET email = ?, nome = IF(nome = ?, ?, nome) WHERE email = ?");
+$participou = $pdo->prepare("SELECT COUNT(*) FROM controle_acesso ca JOIN funcionarios f ON f.id = ca.funcionario_id WHERE f.email = ?");
+foreach ($contasReais as [$antigo, $novo, $nomeAntigo, $nomeNovo]) {
+    $existeEmail->execute([$antigo]);
+    $temAntigo = (int)$existeEmail->fetchColumn() > 0;
+    $existeEmail->execute([$novo]);
+    $temNovo = (int)$existeEmail->fetchColumn() > 0;
+    if ($temAntigo && !$temNovo) {
+        $trocaConta->execute([$novo, $nomeAntigo, $nomeNovo, $antigo]);
+        echo "Usuário de teste agora usa o Gmail: $antigo -> $novo\n";
+    } elseif ($temAntigo && $temNovo) {
+        $participou->execute([$antigo]);
+        if ((int)$participou->fetchColumn() === 0) {
+            $pdo->prepare("DELETE FROM funcionarios WHERE email = ?")->execute([$antigo]);
+            echo "Cadastro repetido removido: $antigo (a conta certa é $novo)\n";
+        } else {
+            $pdo->prepare("UPDATE funcionarios SET ativo = 0 WHERE email = ?")->execute([$antigo]);
+            echo "Cadastro repetido desativado: $antigo (a conta certa é $novo)\n";
+        }
+    }
+}
+
+// 6) usuários de teste (todos com a senha 123456, sem troca obrigatória no primeiro acesso)
 $senhaPadrao = '123456';
 $usuarios = [
-    ['Gestor Teste', 'gestor@empresa.com', 'gestor', 'Gerência'],
-    ['Funcionário 1', 'funcionario1@empresa.com', 'funcionario', 'Analista'],
-    ['Funcionário 2', 'funcionario2@empresa.com', 'funcionario', 'Analista'],
+    ['Gestor Climatize', 'gestorclimatize@gmail.com', 'gestor', 'Gerência'],
+    ['Matheus Cunha', 'funcionario01.empresa@gmail.com', 'funcionario', 'Analista'],
+    ['Felipe Alves', 'funcionario02.empresa@gmail.com', 'funcionario', 'Analista'],
     ['Funcionário 3', 'funcionario3@empresa.com', 'funcionario', 'Administrativo'],
 ];
-$stmt = $pdo->prepare("INSERT INTO funcionarios (nome, email, senha_hash, cargo, tipo_perfil) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE senha_hash = VALUES(senha_hash), tipo_perfil = VALUES(tipo_perfil), ativo = 1");
+$stmt = $pdo->prepare("INSERT INTO funcionarios (nome, email, senha_hash, cargo, tipo_perfil, trocar_senha) VALUES (?, ?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE senha_hash = VALUES(senha_hash), tipo_perfil = VALUES(tipo_perfil), ativo = 1, trocar_senha = 0");
 foreach ($usuarios as [$nome, $email, $perfil, $cargo]) {
     $stmt->execute([$nome, $email, password_hash($senhaPadrao, PASSWORD_DEFAULT), $cargo, $perfil]);
     echo "Usuário pronto: $email / $senhaPadrao ($perfil)\n";

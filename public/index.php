@@ -112,8 +112,8 @@
 
         <div class="credenciais">
             <b>Credenciais de teste</b> (senha <b>123456</b> para todos)
-            <br>Gestor: gestor@empresa.com
-            <br>Funcionários: funcionario1@empresa.com, funcionario2@empresa.com, funcionario3@empresa.com
+            <br>Gestor: gestorclimatize@gmail.com
+            <br>Funcionários: funcionario01.empresa@gmail.com, funcionario02.empresa@gmail.com, funcionario3@empresa.com
         </div>
 
         <button class="voltar-login" onclick="mostrarInicio()">← Voltar para o início</button>
@@ -196,6 +196,31 @@
         <div id="sucessoSenha" class="aviso-sucesso escondido" role="status"></div>
 
         <button id="botaoVoltarSenha" class="voltar-login" onclick="voltarDaSenha()">← Voltar</button>
+    </main>
+</div>
+
+<!-- ===================== PRIMEIRO ACESSO: criar a própria senha ===================== -->
+<div id="telaSenhaInicial" class="pagina login-gestor escondido">
+    <main class="login-card">
+        <div class="login-icone" aria-hidden="true">🔑</div>
+        <h1 tabindex="-1">Crie a sua senha</h1>
+        <p id="textoSenhaInicial" class="subtitulo-login">Por segurança, troque a senha provisória cadastrada pela gestão por uma senha só sua. A gestão não fica sabendo a senha nova.</p>
+
+        <label for="senhaInicialNova">Nova senha</label>
+        <input id="senhaInicialNova" type="password" placeholder="Mínimo de 6 caracteres" autocomplete="new-password">
+
+        <label for="senhaInicialConfirma">Repita a nova senha</label>
+        <input id="senhaInicialConfirma" type="password" autocomplete="new-password" onkeydown="if (event.key === 'Enter') definirSenhaInicial()">
+
+        <label class="mostrar-senha">
+            <input type="checkbox" onchange="mostrarSenhas(this, 'telaSenhaInicial')">
+            <span>Mostrar senhas</span>
+        </label>
+
+        <button id="botaoSenhaInicial" class="botao azul-btn" onclick="definirSenhaInicial()">Salvar e continuar</button>
+        <p id="erroSenhaInicial" class="erro" role="alert"></p>
+
+        <button class="voltar-login" onclick="sair()">← Sair</button>
     </main>
 </div>
 
@@ -521,7 +546,7 @@
 
                 <label for="novoFuncSenha">Senha provisória</label>
                 <input id="novoFuncSenha" type="password" placeholder="Mínimo de 6 caracteres" autocomplete="new-password">
-                <p class="dica-campo">Serve para o primeiro acesso. Depois, a pessoa pode trocar a senha em "Alterar senha" ou pelo "Esqueci minha senha", e a gestão não fica sabendo a senha nova.</p>
+                <p class="dica-campo">Serve só para o primeiro acesso: ao entrar, a pessoa é obrigada a criar a própria senha, e a gestão não fica sabendo a senha nova.</p>
 
                 <label for="novoFuncCargo">Cargo (opcional)</label>
                 <input id="novoFuncCargo" type="text" maxlength="50" placeholder="Ex.: Analista">

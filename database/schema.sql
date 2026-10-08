@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS funcionarios (
     termo_versao INT UNSIGNED NULL,
     termo_aceito_em DATETIME NULL,
     senha_alterada_em DATETIME NULL,
+    trocar_senha TINYINT(1) NOT NULL DEFAULT 0,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

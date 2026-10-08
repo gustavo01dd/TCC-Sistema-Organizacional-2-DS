@@ -21,7 +21,7 @@ var funcionarioEditandoId = null;   // null = cadastrando; número = editando es
 var formularioEditandoId = null;    // null = criando; número = editando esse formulário
 var perguntasEditor = [];           // perguntas do editor de formulários
 
-var TELAS = ["telaPesquisa", "telaLogin", "telaEsqueci", "telaRedefinir", "telaSenha", "telaTermo", "telaQuestionario", "telaObrigado", "telaDashboard"];
+var TELAS = ["telaPesquisa", "telaLogin", "telaEsqueci", "telaRedefinir", "telaSenha", "telaSenhaInicial", "telaTermo", "telaQuestionario", "telaObrigado", "telaDashboard"];
 var VIEWS = ["dashboard", "resultados", "comparar", "formularios", "comentarios", "funcionarios", "relatorios"];
 var CATEGORIAS_SUGERIDAS = ["Ambiente", "Liderança", "Comunicação", "Recursos e infraestrutura", "Desenvolvimento", "Engajamento", "Qualidade de vida", "Reconhecimento"];
 var HORAS_RASCUNHO = 24;
@@ -29,6 +29,7 @@ var TAMANHO_MINIMO_SENHA = 6;
 
 var tokenRedefinicao = null;        // código do link "Esqueci minha senha"
 var telaAntesDaSenha = null;        // para onde o "Voltar" da tela Alterar senha leva
+var loginPendente = null;           // primeiro acesso: para onde seguir depois de criar a senha
 
 document.addEventListener("DOMContentLoaded", iniciar);
 
@@ -116,6 +117,11 @@ function sessaoExpirada(retorno) {
     if (retorno.status === 401) {
         alert("Sua sessão expirou. Entre novamente.");
         mostrarLogin();
+        return true;
+    }
+    // ainda está com a senha provisória: precisa criar a própria senha
+    if (retorno.status === 403 && retorno.dados && retorno.dados.trocar_senha) {
+        mostrarSenhaInicial();
         return true;
     }
     return false;
@@ -224,17 +230,28 @@ async function entrar() {
         document.getElementById("senhaLogin").value = "";
         usuarioAtualId = Number(r.dados.id);
         nomeUsuarioAtual = r.dados.nome || "";
-        if (r.dados.perfil === "gestor") {
-            abrirPainelGestor(r.dados.nome);
-        } else if (r.dados.precisa_termo) {
-            mostrarTermo();
-        } else {
-            mostrarPesquisa();
+        if (r.dados.precisa_trocar_senha) {
+            // primeiro acesso com a senha provisória: cria a própria senha antes de tudo
+            loginPendente = r.dados;
+            mostrarSenhaInicial();
+            return;
         }
+        seguirDepoisDoLogin(r.dados);
     } catch (e) {
         erro.innerText = "Erro de conexão. Tente novamente.";
     } finally {
         botao.disabled = false;
+    }
+}
+
+// gestor vai para o painel; funcionário vai para o termo (se faltar) ou para a pesquisa
+function seguirDepoisDoLogin(dados) {
+    if (dados.perfil === "gestor") {
+        abrirPainelGestor(dados.nome || nomeUsuarioAtual);
+    } else if (dados.precisa_termo) {
+        mostrarTermo();
+    } else {
+        mostrarPesquisa();
     }
 }
 
@@ -419,6 +436,53 @@ async function redefinirSenha() {
 }
 
 // ---------- Alterar senha (logado) ----------
+
+// ---------- Primeiro acesso: criar a própria senha ----------
+
+function mostrarSenhaInicial() {
+    mostrarTela("telaSenhaInicial");
+    limparCamposSenha("telaSenhaInicial");
+    document.getElementById("erroSenhaInicial").innerText = "";
+    var texto = document.getElementById("textoSenhaInicial");
+    texto.innerText = (nomeUsuarioAtual ? "Olá, " + nomeUsuarioAtual.split(" ")[0] + "! " : "") +
+        "Por segurança, troque a senha provisória cadastrada pela gestão por uma senha só sua. A gestão não fica sabendo a senha nova.";
+    document.getElementById("senhaInicialNova").focus();
+}
+
+async function definirSenhaInicial() {
+    var nova = document.getElementById("senhaInicialNova").value;
+    var confirmacao = document.getElementById("senhaInicialConfirma").value;
+    var erro = document.getElementById("erroSenhaInicial");
+    var botao = document.getElementById("botaoSenhaInicial");
+
+    erro.innerText = conferirNovaSenha(nova, confirmacao);
+    if (erro.innerText) return;
+
+    botao.disabled = true;
+    try {
+        var r = await chamarApi("definir_senha_inicial", { nova_senha: nova });
+        if (r.status === 401) {
+            alert("Sua sessão expirou. Entre novamente.");
+            mostrarLogin();
+            return;
+        }
+        if (!r.ok) {
+            erro.innerText = r.dados.erro || "Não foi possível salvar a senha.";
+            return;
+        }
+        limparCamposSenha("telaSenhaInicial");
+        anunciar("Senha criada com sucesso.");
+        var dados = loginPendente || {};
+        dados.perfil = r.dados.perfil;
+        dados.precisa_termo = r.dados.precisa_termo;
+        loginPendente = null;
+        seguirDepoisDoLogin(dados);
+    } catch (e) {
+        erro.innerText = "Erro de conexão. Tente novamente.";
+    } finally {
+        botao.disabled = false;
+    }
+}
 
 function mostrarAlterarSenha() {
     telaAntesDaSenha = TELAS.find(function (id) {
@@ -1382,6 +1446,14 @@ function renderizarListaFormularios(lista, emailAtivo) {
         if (f.email_abertura_em) extras += '<small class="linha-email">✉ Aviso de abertura enviado em ' + formatarDataHora(f.email_abertura_em) + '</small>';
         if (f.email_encerramento_em) extras += '<small class="linha-email">✉ Aviso de encerramento enviado em ' + formatarDataHora(f.email_encerramento_em) + '</small>';
         if (f.lembrete_em) extras += '<small class="linha-email">✉ Último lembrete em ' + formatarDataHora(f.lembrete_em) + '</small>';
+        if (f.lembrete_auto_em) {
+            var qtd = Number(f.lembrete_auto_destinatarios || 0);
+            extras += '<small class="linha-email">🔔 Lembrete automático enviado em ' + formatarDataHora(f.lembrete_auto_em) +
+                ' para ' + qtd + (qtd === 1 ? ' pessoa' : ' pessoas') + '</small>';
+        } else if (f.lembrete_auto_previsto && emailAtivo) {
+            extras += '<small class="linha-email">🔔 Lembrete automático programado para ' + formatarDataHora(f.lembrete_auto_previsto) +
+                ' (para quem ainda não tiver respondido)</small>';
+        }
 
         return '<div class="item-formulario">' +
             '<div>' +
@@ -1761,6 +1833,10 @@ function renderizarListaFuncionarios(lista, temPesquisaAtiva) {
             (gestor ? "Gestor" : "Funcionário") + '</span>' +
             '<span class="' + (ativo ? "status-ativo" : "status-encerrado") + '">' +
             (ativo ? "Ativo" : "Inativo") + '</span>';
+
+        if (Number(f.trocar_senha) === 1) {
+            selos += '<span class="status-rascunho" title="Ainda não fez o primeiro acesso: vai criar a própria senha ao entrar">Senha provisória</span>';
+        }
 
         if (!gestor) {
             // RNF09: comprovante do aceite do termo de consentimento
@@ -2180,7 +2256,8 @@ async function carregarLogsAcesso() {
             falha_login: ["acao-falha", "Tentativa de login recusada"],
             senha_alterada: ["acao-senha", "Alterou a própria senha"],
             senha_redefinida: ["acao-senha", "Criou nova senha pelo link do email"],
-            link_senha_enviado: ["acao-senha", "Enviou um link de redefinição de senha"]
+            link_senha_enviado: ["acao-senha", "Enviou um link de redefinição de senha"],
+            senha_inicial: ["acao-senha", "Criou a própria senha no primeiro acesso"]
         };
 
         container.innerHTML = logs.map(function (log) {

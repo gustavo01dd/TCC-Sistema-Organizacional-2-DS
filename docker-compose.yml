@@ -4,7 +4,31 @@
 #   Preparar:  docker compose exec php php /var/www/database/seed.php
 #   Acessar:   http://localhost:8080
 #   E-mails:   http://localhost:8025  (caixa de entrada de teste do Mailpit)
+#   Demonstração (só na apresentação): docker compose exec php php /var/www/database/demo.php
 # ============================================================
+
+# Variáveis do PHP, usadas pelo site (php) e pelo agendador
+x-ambiente-php: &ambiente-php
+  DB_HOST: mariadb
+  DB_NAME: clima_tcc
+  DB_USER: clima_user
+  DB_PASS: clima_pass
+  DB_TIMEZONE: "-03:00"
+  TZ: America/Sao_Paulo
+  # RF08: e-mails de abertura, encerramento e lembrete.
+  # Sem arquivo .env, tudo vai para o Mailpit (teste). Para usar um e-mail de verdade
+  # (Gmail, por exemplo), copie .env.exemplo para .env e preencha: nada aqui precisa mudar.
+  SMTP_HOST: ${SMTP_HOST:-mailpit}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  SMTP_SEGURANCA: ${SMTP_SEGURANCA:-}
+  SMTP_USUARIO: ${SMTP_USUARIO:-}
+  SMTP_SENHA: ${SMTP_SENHA:-}
+  # remetente institucional de todos os avisos (RH)
+  SMTP_REMETENTE: ${SMTP_REMETENTE:-rh@empresa.local}
+  SMTP_NOME: "${SMTP_NOME:-Climatize RH}"
+  # "Responder para" dos lembretes. Vazio = email do gestor que clicou em Lembrete
+  EMAIL_GESTOR_LEMBRETES: ${EMAIL_GESTOR_LEMBRETES:-}
+  APP_URL: ${APP_URL:-http://localhost:8080}
 
 services:
   mariadb:
@@ -30,30 +54,26 @@ services:
     depends_on:
       - mariadb
       - mailpit
-    environment:
-      DB_HOST: mariadb
-      DB_NAME: clima_tcc
-      DB_USER: clima_user
-      DB_PASS: clima_pass
-      DB_TIMEZONE: "-03:00"
-      TZ: America/Sao_Paulo
-      # RF08: e-mails de abertura, encerramento e lembrete.
-      # Sem arquivo .env, tudo vai para o Mailpit (teste). Para usar um e-mail de verdade
-      # (Gmail, por exemplo), copie .env.exemplo para .env e preencha: nada aqui precisa mudar.
-      SMTP_HOST: ${SMTP_HOST:-mailpit}
-      SMTP_PORT: ${SMTP_PORT:-1025}
-      SMTP_SEGURANCA: ${SMTP_SEGURANCA:-}
-      SMTP_USUARIO: ${SMTP_USUARIO:-}
-      SMTP_SENHA: ${SMTP_SENHA:-}
-      # remetente institucional de todos os avisos (RH)
-      SMTP_REMETENTE: ${SMTP_REMETENTE:-rh@empresa.local}
-      SMTP_NOME: "${SMTP_NOME:-Climatize RH}"
-      # "Responder para" dos lembretes. Vazio = email do gestor que clicou em Lembrete
-      EMAIL_GESTOR_LEMBRETES: ${EMAIL_GESTOR_LEMBRETES:-}
-      APP_URL: ${APP_URL:-http://localhost:8080}
+    environment: *ambiente-php
     volumes:
       - ./public:/var/www/public
       - ./database:/var/www/database
+
+  # Tarefas no horário certo, mesmo sem ninguém usando o site: a cada 5 minutos
+  # encerra as pesquisas vencidas (com o relatório) e manda os avisos por e-mail,
+  # inclusive o lembrete automático dos últimos dias.
+  agendador:
+    build: ./docker/php
+    container_name: clima_agendador
+    restart: unless-stopped
+    depends_on:
+      - mariadb
+      - mailpit
+    environment: *ambiente-php
+    volumes:
+      - ./public:/var/www/public
+      - ./database:/var/www/database
+    command: ["sh", "-c", "while true; do php /var/www/database/tarefas.php; sleep 300; done"]
 
   nginx:
     image: nginx:alpine

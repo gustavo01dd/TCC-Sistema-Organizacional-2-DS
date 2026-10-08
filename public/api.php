@@ -35,6 +35,14 @@ function exigirMetodo($esperado) {
     }
 }
 
+// Primeiro acesso: com a senha provisória cadastrada pela gestão, a pessoa só
+// consegue criar a própria senha (rota definir_senha_inicial) ou sair.
+function exigirSenhaPropria($usuario) {
+    if ((int)($usuario['trocar_senha'] ?? 0) === 1) {
+        responderJson(['erro' => 'Por segurança, crie a sua própria senha antes de continuar.', 'trocar_senha' => true], 403);
+    }
+}
+
 // RN06 / RNF04: só gestores autenticados
 function exigirGestor($pdo) {
     $usuario = usuarioLogado($pdo);
@@ -44,6 +52,7 @@ function exigirGestor($pdo) {
     if ($usuario['tipo_perfil'] !== 'gestor') {
         responderJson(['erro' => 'Acesso restrito aos gestores'], 403);
     }
+    exigirSenhaPropria($usuario);
     return $usuario;
 }
 
@@ -55,6 +64,7 @@ function exigirFuncionario($pdo, $exigirTermo = true) {
     if ($usuario['tipo_perfil'] !== 'funcionario') {
         responderJson(['erro' => 'A pesquisa é respondida pelos funcionários. Gestores acompanham os resultados pelo painel.'], 403);
     }
+    exigirSenhaPropria($usuario);
     // RNF09: sem o aceite do termo de consentimento, não responde
     if ($exigirTermo && !termoAceito($usuario)) {
         responderJson(['erro' => 'É preciso aceitar o termo de consentimento antes de responder.', 'precisa_termo' => true], 403);
@@ -182,7 +192,7 @@ try {
                 ], 429);
             }
 
-            $stmt = $pdo->prepare("SELECT id, nome, email, senha_hash, tipo_perfil, ativo, termo_versao, senha_alterada_em FROM funcionarios WHERE email = ?");
+            $stmt = $pdo->prepare("SELECT id, nome, email, senha_hash, tipo_perfil, ativo, termo_versao, senha_alterada_em, trocar_senha FROM funcionarios WHERE email = ?");
             $stmt->execute([$email]);
             $usuario = $stmt->fetch();
 
@@ -200,6 +210,7 @@ try {
                     'nome' => $usuario['nome'],
                     'perfil' => $usuario['tipo_perfil'],
                     'precisa_termo' => !termoAceito($usuario),
+                    'precisa_trocar_senha' => (int)$usuario['trocar_senha'] === 1,
                 ]);
             }
 
@@ -274,6 +285,43 @@ try {
                 registrarLog($pdo, (int)$usuario['id'], $usuario['email'], 'senha_alterada');
             }
             responderJson(['sucesso' => true, 'email_enviado' => avisarSenhaAlterada($usuario, 'usuario')]);
+            break;
+
+        // Primeiro acesso: troca a senha provisória (cadastrada pela gestão) por uma
+        // senha da própria pessoa. Quem chega aqui acabou de entrar com a senha
+        // provisória, então não precisa digitá-la de novo.
+        case 'definir_senha_inicial':
+            exigirMetodo('POST');
+            $usuario = usuarioLogado($pdo);
+            if (!$usuario) {
+                responderJson(['erro' => 'Faça login para continuar'], 401);
+            }
+            if ((int)$usuario['trocar_senha'] !== 1) {
+                responderJson(['erro' => 'A sua senha já foi criada. Para trocá-la, use "Alterar senha".'], 400);
+            }
+            $nova = (string)(corpoJson()['nova_senha'] ?? '');
+            $erroSenha = validarSenhaNova($nova);
+            if ($erroSenha) {
+                responderJson(['erro' => $erroSenha . '.'], 400);
+            }
+            $stmt = $pdo->prepare("SELECT senha_hash FROM funcionarios WHERE id = ?");
+            $stmt->execute([$usuario['id']]);
+            if (password_verify($nova, (string)$stmt->fetchColumn())) {
+                responderJson(['erro' => 'A nova senha precisa ser diferente da senha provisória.'], 400);
+            }
+
+            $marca = definirSenha($pdo, (int)$usuario['id'], $nova);
+            session_regenerate_id(true);
+            marcarSessao($usuario['id'], $marca);
+            if ($usuario['tipo_perfil'] === 'gestor') {
+                registrarLog($pdo, (int)$usuario['id'], $usuario['email'], 'senha_inicial');
+            }
+            responderJson([
+                'sucesso' => true,
+                'perfil' => $usuario['tipo_perfil'],
+                'precisa_termo' => !termoAceito($usuario),
+                'email_enviado' => avisarSenhaAlterada($usuario, 'usuario'),
+            ]);
             break;
 
         // Esqueci minha senha: manda um link por email. A resposta é sempre a mesma,
@@ -474,7 +522,7 @@ try {
             // "já respondeu" = existe carimbo em controle_acesso para a pesquisa atual.
             // Só isso: o conteúdo das respostas continua sem ligação com a pessoa.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.nome, f.email, f.cargo, f.data_admissao, f.tipo_perfil, f.ativo,
+                SELECT f.id, f.nome, f.email, f.cargo, f.data_admissao, f.tipo_perfil, f.ativo, f.trocar_senha,
                        f.termo_aceito_em, (f.termo_versao >= ?) AS termo_em_dia,
                        (ca.funcionario_id IS NOT NULL) AS respondeu_atual
                 FROM funcionarios f
@@ -501,7 +549,8 @@ try {
                 responderJson(['erro' => 'Já existe um cadastro com este email'], 409);
             }
 
-            $stmt = $pdo->prepare("INSERT INTO funcionarios (nome, email, senha_hash, cargo, data_admissao, tipo_perfil) VALUES (?, ?, ?, ?, ?, ?)");
+            // a senha cadastrada pela gestão é provisória: no primeiro acesso a pessoa cria a sua
+            $stmt = $pdo->prepare("INSERT INTO funcionarios (nome, email, senha_hash, cargo, data_admissao, tipo_perfil, trocar_senha) VALUES (?, ?, ?, ?, ?, ?, 1)");
             $stmt->execute([$d['nome'], $d['email'], password_hash($d['senha'], PASSWORD_DEFAULT), $d['cargo'], $d['data_admissao'], $d['perfil']]);
 
             responderJson(['sucesso' => true, 'funcionario_id' => (int)$pdo->lastInsertId()]);
@@ -536,7 +585,8 @@ try {
             // nova senha definida pelo gestor: derruba as sessões antigas da pessoa e avisa por email
             $emailEnviado = false;
             if ($d['senha'] !== '') {
-                $marca = definirSenha($pdo, $funcionarioId, $d['senha']);
+                // senha de outra pessoa definida pela gestão = provisória
+                $marca = definirSenha($pdo, $funcionarioId, $d['senha'], $funcionarioId !== (int)$gestor['id']);
                 limparTentativas($pdo, chaveTentativa('login', $d['email']));
                 if ($funcionarioId === (int)$gestor['id']) {
                     marcarSessao($funcionarioId, $marca);
@@ -566,6 +616,9 @@ try {
             }
             if (!(int)$pessoa['ativo']) {
                 responderJson(['erro' => 'Este cadastro está desativado. Reative-o antes de enviar o link.'], 400);
+            }
+            if (contaDemonstracao($pessoa['email'])) {
+                responderJson(['erro' => 'Esta é uma conta dos dados de demonstração: o email não existe de verdade.'], 400);
             }
             // mesmo limite do "Esqueci minha senha": no máximo alguns links por hora para a mesma pessoa
             $stmt = $pdo->prepare("SELECT COUNT(*) FROM redefinicoes_senha WHERE funcionario_id = ? AND criado_em >= DATE_SUB(NOW(), INTERVAL 1 HOUR)");
@@ -671,12 +724,19 @@ try {
                        (SELECT MAX(enviada_em) FROM notificacoes n WHERE n.formulario_id = f.id AND n.tipo = 'abertura' AND n.destinatarios > 0) AS email_abertura_em,
                        (SELECT MAX(enviada_em) FROM notificacoes n WHERE n.formulario_id = f.id AND n.tipo = 'encerramento' AND n.destinatarios > 0) AS email_encerramento_em,
                        (SELECT MAX(enviada_em) FROM notificacoes n WHERE n.formulario_id = f.id AND n.tipo = 'lembrete') AS lembrete_em,
+                       (SELECT MAX(enviada_em) FROM notificacoes n WHERE n.formulario_id = f.id AND n.tipo = 'lembrete_auto') AS lembrete_auto_em,
+                       (SELECT n.destinatarios FROM notificacoes n WHERE n.formulario_id = f.id AND n.tipo = 'lembrete_auto' ORDER BY n.id DESC LIMIT 1) AS lembrete_auto_destinatarios,
                        (f.status = 'ativo' AND (f.data_abertura IS NULL OR f.data_abertura <= NOW()) AND (f.data_fechamento IS NULL OR f.data_fechamento >= NOW())) AS aberta_agora
                 FROM formularios f
                 LEFT JOIN relatorios rel ON rel.formulario_id = f.id
                 ORDER BY f.criado_em DESC, f.id DESC
             ");
-            responderJson(['email_ativo' => emailAtivo(), 'formularios' => $stmt->fetchAll()]);
+            $formularios = $stmt->fetchAll();
+            foreach ($formularios as &$f) {
+                $f['lembrete_auto_previsto'] = ($f['status'] === 'ativo' && !$f['lembrete_auto_em']) ? lembreteAutomaticoPrevisto($f) : null;
+            }
+            unset($f);
+            responderJson(['email_ativo' => emailAtivo(), 'formularios' => $formularios]);
             break;
 
         // dados completos de um formulário, para edição

@@ -40,6 +40,10 @@ if (!$usuario || $usuario['tipo_perfil'] !== 'gestor') {
     http_response_code(401);
     exit('Acesso restrito aos gestores. Faça login no painel e tente novamente.');
 }
+if ((int)$usuario['trocar_senha'] === 1) {
+    http_response_code(403);
+    exit('Crie a sua própria senha no painel antes de abrir os relatórios.');
+}
 
 try {
     processarEncerramentos($pdo);
