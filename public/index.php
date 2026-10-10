@@ -32,8 +32,8 @@
 <!-- botão de tema (claro / escuro) das telas públicas; no painel ele fica no menu -->
 <button id="botaoTema" class="botao-tema" onclick="alternarTema()" title="Mudar para o modo escuro" aria-label="Mudar para o modo escuro">☾</button>
 
-<!-- ===================== TELA INICIAL ===================== -->
-<div id="telaPesquisa" class="pagina">
+<!-- ===================== TELA INICIAL DA PESQUISA (funcionário, depois do login) ===================== -->
+<div id="telaPesquisa" class="pagina escondido">
     <header class="topo">
         <img class="topo-logo so-claro" src="img/logo-climatize-branco.svg" alt="Climatize" width="146" height="34">
         <img class="topo-logo so-escuro" src="img/logo-climatize-escuro.svg" alt="Climatize" width="146" height="34">
@@ -41,9 +41,14 @@
     </header>
 
     <main class="conteudo pesquisa-inicio">
+        <div class="acoes-questionario">
+            <button class="voltar" onclick="sair()">‹ Sair</button>
+            <button class="link-senha" onclick="mostrarAlterarSenha()"><span aria-hidden="true">🔑 </span>Alterar senha</button>
+        </div>
+
         <div class="icone-principal" aria-hidden="true"><img class="so-claro" src="img/logo-simbolo-branco.svg" alt="" width="45" height="56"><img class="so-escuro" src="img/logo-simbolo-escuro.svg" alt="" width="45" height="56"></div>
         <h1 tabindex="-1">Pesquisa de Clima Organizacional</h1>
-        <p class="subtitulo">Sua opinião é fundamental para melhorarmos juntos</p>
+        <p class="subtitulo"><span id="saudacaoInicio"></span>Sua opinião é fundamental para melhorarmos juntos</p>
 
         <div id="avisoPesquisa" class="aviso-pesquisa escondido" role="status"></div>
 
@@ -51,7 +56,7 @@
             <div class="info-icone azul" aria-hidden="true">♙</div>
             <div>
                 <h2 class="info-titulo">Respostas Anônimas</h2>
-                <p>Você entra com email e senha só para o sistema saber que você já participou e evitar respostas duplicadas. Suas respostas nunca ficam ligadas ao seu nome: ninguém, nem a gestão, consegue ver o que você respondeu.</p>
+                <p>Seu login serve só para o sistema saber que você já participou e evitar respostas duplicadas. Suas respostas nunca ficam ligadas ao seu nome: ninguém, nem a gestão, consegue ver o que você respondeu.</p>
             </div>
         </div>
 
@@ -74,26 +79,26 @@
         <div class="como">
             <h2>Como funciona?</h2>
             <ol>
-                <li>Entre com o email e a senha cadastrados pela gestão</li>
+                <li>Clique em <b>Iniciar Pesquisa</b></li>
                 <li>No primeiro acesso, leia e aceite o termo de consentimento</li>
                 <li>Responda as perguntas: notas de 0 a 10, sim ou não e alternativas</li>
                 <li>Se quiser, deixe um comentário ou sugestão no final e envie</li>
             </ol>
         </div>
 
-        <button class="botao azul-btn" onclick="mostrarLogin()">Iniciar Pesquisa</button>
+        <button class="botao azul-btn" onclick="comecarPesquisa()">Iniciar Pesquisa</button>
 
         <p class="rodape-frase">Suas respostas nos ajudam a criar um <b>ambiente de trabalho melhor para todos</b></p>
 
-        <button class="link-gestor" onclick="mostrarLogin()">Acesso para gestores →</button>
         <p class="rodape-links"><a href="privacidade.php" target="_blank" rel="noopener">Política de privacidade</a></p>
     </main>
 </div>
 
-<!-- ===================== LOGIN (funcionários e gestores) ===================== -->
-<div id="telaLogin" class="pagina login-gestor escondido">
+<!-- ===================== LOGIN (primeira tela: funcionários e gestores) ===================== -->
+<div id="telaLogin" class="pagina login-gestor">
     <main class="login-card">
-        <div class="login-icone login-icone-marca" aria-hidden="true"><img src="img/logo-simbolo-branco.svg" alt="" width="38" height="48"></div>
+        <img class="login-logo so-claro" src="img/logo-climatize.svg" alt="Climatize" width="189" height="44">
+        <img class="login-logo so-escuro" src="img/logo-climatize-escuro.svg" alt="Climatize" width="189" height="44">
 
         <h1 tabindex="-1">Entrar</h1>
         <p class="subtitulo-login">Funcionários vão para a pesquisa e gestores para o painel de gestão</p>
@@ -116,7 +121,6 @@
             <br>Funcionários: funcionario01.empresa@gmail.com, funcionario02.empresa@gmail.com, funcionario3@empresa.com
         </div>
 
-        <button class="voltar-login" onclick="mostrarInicio()">← Voltar para o início</button>
         <p class="rodape-links"><a href="privacidade.php" target="_blank" rel="noopener">Política de privacidade</a></p>
     </main>
 </div>
@@ -308,7 +312,8 @@
             <p>Suas respostas foram gravadas de forma <b>anônima</b>: o sistema registrou apenas que você participou, nunca o que você respondeu.</p>
             <p>Os resultados são analisados pela gestão de forma agregada e ajudam a construir um ambiente de trabalho melhor.</p>
         </div>
-        <button class="botao azul-btn" onclick="mostrarInicio()">Voltar para o início</button>
+        <p class="obrigado-saida">Por segurança, você já saiu do sistema.</p>
+        <button class="botao azul-btn" onclick="mostrarLogin()">Voltar para o login</button>
     </main>
 </div>
 

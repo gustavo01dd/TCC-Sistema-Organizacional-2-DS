@@ -29,13 +29,13 @@ var TAMANHO_MINIMO_SENHA = 6;
 
 var tokenRedefinicao = null;        // código do link "Esqueci minha senha"
 var telaAntesDaSenha = null;        // para onde o "Voltar" da tela Alterar senha leva
+var termoPendente = false;          // funcionário ainda não aceitou o termo (vem do login)
 var loginPendente = null;           // primeiro acesso: para onde seguir depois de criar a senha
 
 document.addEventListener("DOMContentLoaded", iniciar);
 
 function iniciar() {
     aplicarTema(temaAtual());
-    carregarAvisoPesquisa();
     limparRascunhosAntigos();
 
     // link do email "Esqueci minha senha": index.php?redefinir=<código>
@@ -44,6 +44,9 @@ function iniciar() {
         // tira o código da barra de endereço (e do histórico do navegador)
         history.replaceState(null, "", window.location.pathname);
         mostrarRedefinir(token);
+    } else {
+        // a primeira tela é o login
+        mostrarLogin();
     }
 
     // se a pessoa nunca escolheu um tema, acompanha o tema do sistema
@@ -187,7 +190,13 @@ function mostrarTela(id) {
     }
 }
 
+// tela inicial da pesquisa: aparece para o funcionário depois do login
 function mostrarInicio() {
+    if (!usuarioAtualId) {
+        mostrarLogin();
+        return;
+    }
+    document.getElementById("saudacaoInicio").innerText = nomeUsuarioAtual ? "Olá, " + nomeUsuarioAtual + "! " : "";
     mostrarTela("telaPesquisa");
     carregarAvisoPesquisa();
 }
@@ -244,11 +253,19 @@ async function entrar() {
     }
 }
 
-// gestor vai para o painel; funcionário vai para o termo (se faltar) ou para a pesquisa
+// gestor vai para o painel; funcionário vai para a tela inicial da pesquisa
 function seguirDepoisDoLogin(dados) {
     if (dados.perfil === "gestor") {
         abrirPainelGestor(dados.nome || nomeUsuarioAtual);
-    } else if (dados.precisa_termo) {
+    } else {
+        termoPendente = !!dados.precisa_termo;
+        mostrarInicio();
+    }
+}
+
+// botão "Iniciar Pesquisa": termo de consentimento (se faltar) e depois o questionário
+function comecarPesquisa() {
+    if (termoPendente) {
         mostrarTermo();
     } else {
         mostrarPesquisa();
@@ -267,6 +284,7 @@ async function encerrarSessao() {
     meuId = null;
     usuarioAtualId = null;
     nomeUsuarioAtual = "";
+    termoPendente = false;
     cancelarEdicaoFuncionario();
     cancelarEdicaoFormulario();
 }
@@ -274,7 +292,7 @@ async function encerrarSessao() {
 async function sair() {
     apagarRascunho();
     await encerrarSessao();
-    mostrarInicio();
+    mostrarLogin();
 }
 
 
@@ -300,6 +318,7 @@ async function aceitarTermo() {
             erro.innerText = r.dados.erro || "Não foi possível registrar o aceite.";
             return;
         }
+        termoPendente = false;
         mostrarPesquisa();
     } catch (e) {
         erro.innerText = "Erro de conexão. Tente novamente.";

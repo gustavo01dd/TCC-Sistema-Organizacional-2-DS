@@ -477,6 +477,21 @@ h1 {
     box-shadow: 0 10px 24px rgba(11, 94, 215, 0.35);
 }
 
+.obrigado-saida {
+    margin: 18px 0 0;
+    text-align: center;
+    font-size: 14px;
+    color: var(--texto-suave, inherit);
+}
+
+/* logo completo na tela de login (primeira tela do sistema) */
+.login-logo {
+    display: block;
+    height: 44px;
+    width: auto;
+    margin: 0 auto 22px;
+}
+
 .login-icone-marca img {
     display: block;
     width: 38px;
