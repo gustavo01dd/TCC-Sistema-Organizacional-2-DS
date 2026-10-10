@@ -641,7 +641,30 @@ function lerRelatorio($pdo, $formularioId) {
         return null;
     }
     $dados = json_decode(descriptografar($linha['dados_consolidados']), true);
-    return is_array($dados) ? ['data_geracao' => $linha['data_geracao'], 'dados' => $dados] : null;
+    if (!relatorioNoFormatoAtual($dados)) {
+        // relatório guardado por uma versão anterior do sistema, com menos campos:
+        // é refeito no formato atual, mantendo a data em que foi gerado
+        $dados = montarDadosConsolidados($pdo, $formularioId);
+        if ($dados === null) {
+            return null;
+        }
+        $stmt = $pdo->prepare("UPDATE relatorios SET dados_consolidados = ? WHERE formulario_id = ?");
+        $stmt->execute([criptografar(json_encode($dados, JSON_UNESCAPED_UNICODE)), $formularioId]);
+    }
+    return ['data_geracao' => $linha['data_geracao'], 'dados' => $dados];
+}
+
+// confere se o relatório guardado tem todos os campos que o relatório impresso usa
+function relatorioNoFormatoAtual($dados) {
+    if (!is_array($dados) || !is_array($dados['formulario'] ?? null)) {
+        return false;
+    }
+    foreach (['total_respostas', 'dados_ocultos', 'media_geral', 'categorias', 'por_pergunta', 'comentarios'] as $campo) {
+        if (!array_key_exists($campo, $dados)) {
+            return false;
+        }
+    }
+    return array_key_exists('data_abertura', $dados['formulario']) && array_key_exists('data_fechamento', $dados['formulario']);
 }
 
 function encerrarFormulario($pdo, $formularioId) {

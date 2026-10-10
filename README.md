@@ -11,6 +11,10 @@ do navegador e nos e-mails enviados aos funcionários.
 
 ## Funcionalidades
 
+**Fluxo das telas:** a primeira tela é o **login**, igual para todos. O gestor vai direto para o painel;
+o funcionário vai para a **tela inicial da pesquisa** (explica o anonimato, mostra o aviso da pesquisa aberta
+e tem o botão **Iniciar Pesquisa**, além de Sair e Alterar senha).
+
 **Para quem responde**
 
 - Termo de consentimento (LGPD) no primeiro acesso, com link para a política de privacidade.
@@ -268,9 +272,9 @@ Em produção, a chave também pode ser passada pela variável de ambiente `APP_
 | Email | Perfil | Vai para |
 |---|---|---|
 | gestorclimatize@gmail.com (Gestor Climatize) | Gestor | Painel de gestão (Gmail de verdade: recebe o "Relatório disponível" e as respostas aos lembretes) |
-| funcionario01.empresa@gmail.com (Matheus Cunha) | Funcionário | Pesquisa (Gmail de verdade, para testar os e-mails) |
-| funcionario02.empresa@gmail.com (Felipe Alves) | Funcionário | Pesquisa (Gmail de verdade, para testar os e-mails) |
-| funcionario3@empresa.com | Funcionário | Pesquisa |
+| funcionario01.empresa@gmail.com (Matheus Cunha) | Funcionário | Tela inicial da pesquisa (Gmail de verdade, para testar os e-mails) |
+| funcionario02.empresa@gmail.com (Felipe Alves) | Funcionário | Tela inicial da pesquisa (Gmail de verdade, para testar os e-mails) |
+| funcionario3@empresa.com | Funcionário | Tela inicial da pesquisa |
 
 - A pesquisa de exemplo fica aberta por **7 dias** (RN01). Depois disso ela é encerrada sozinha
   e o relatório consolidado é gerado. Para testar de novo, crie e ative outro formulário no painel.
@@ -350,7 +354,7 @@ Cuidados extras (RN07), porque o gestor vê quem já respondeu:
 | RF05 | Gráficos automáticos | ✅ | Dashboard (evolução, distribuição, categorias), Resultados (por pergunta e alternativa) e Comparar |
 | RF06 | Relatório consolidado ao final | ✅ | Ver RN08 |
 | RF07 | Indicadores para os gestores | ✅ | Média geral, participação, pontos críticos e fortes, média por categoria, estatísticas por pergunta, comparação entre ciclos |
-| RF08 | Notificações de abertura e encerramento | ✅ | Aviso na tela inicial + e-mails de abertura, encerramento e lembrete (SMTP; Mailpit no ambiente de teste) |
+| RF08 | Notificações de abertura e encerramento | ✅ | Aviso na tela inicial da pesquisa + e-mails de abertura, encerramento e lembrete (SMTP; Mailpit no ambiente de teste) |
 | RF09 | Impedir múltiplas respostas | ✅ | Ver RN02 |
 | RF10 | Exportar relatórios em PDF | ✅ | Relatório para "Salvar como PDF" do navegador |
 | RF11 | Filtro por setor ou equipe | ❌ | Não implementado: conflita com RN05/RN07 (ver abaixo) |
@@ -404,7 +408,7 @@ Se mudar um valor, ajuste também os textos que citam o número em `index.php` e
 
 | Ação | Quem usa | O que faz |
 |---|---|---|
-| status_pesquisa | público | Aviso da tela inicial (aberta / encerrada) |
+| status_pesquisa | público | Aviso da tela inicial da pesquisa (aberta / encerrada) |
 | login, logout | todos | Login único; o perfil decide a tela |
 | alterar_senha | logado | Troca a própria senha (pede a atual) e manda e-mail de confirmação |
 | definir_senha_inicial | logado com senha provisória | Primeiro acesso: troca a senha provisória por uma senha própria |
@@ -450,7 +454,7 @@ o que poderia inibir respostas sinceras.
 
 Não precisa mexer no código nem no `docker-compose.yml`:
 
-1. Use uma conta Gmail só para o sistema (ex.: `rh.climatize@gmail.com`) e ative a
+1. Use uma conta Gmail só para o sistema (ex.: `climatize.rh@gmail.com`) e ative a
    **verificação em duas etapas** nela.
 2. Crie uma **senha de app** em https://myaccount.google.com/apppasswords (16 letras).
    A senha normal da conta não funciona.
